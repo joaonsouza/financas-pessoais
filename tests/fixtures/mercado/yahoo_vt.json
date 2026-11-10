@@ -1,0 +1,32 @@
+{
+ "chart": {
+  "result": [
+   {
+    "meta": {
+     "currency": "USD",
+     "symbol": "VT",
+     "gmtoffset": -14400,
+     "regularMarketPrice": 131.2,
+     "chartPreviousClose": 130.4
+    },
+    "timestamp": [
+     1785416400,
+     1785502800,
+     1787922000
+    ],
+    "indicators": {
+     "quote": [
+      {
+       "close": [
+        120.5,
+        124.9,
+        128.3
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "error": null
+ }
+}

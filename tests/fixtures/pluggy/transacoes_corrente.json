@@ -1,0 +1,8 @@
+{"page": 1, "total": 3, "totalPages": 1, "results": [
+ {"id": "tx-b-001", "date": "2026-10-01T00:00:00.000Z", "description": "Farmacia Exemplo", "descriptionRaw": "FARMACIA EXEMPLO",
+  "amount": -45.0, "type": "DEBIT", "status": "POSTED", "category": "Pharmacy", "creditCardMetadata": null},
+ {"id": "tx-b-002", "date": "2026-10-02T00:00:00.000Z", "description": "Salario Ficticio", "descriptionRaw": "SALARIO FICTICIO",
+  "amount": 5000.0, "type": "CREDIT", "status": "POSTED", "category": "Income", "creditCardMetadata": null},
+ {"id": "tx-b-003", "date": "2026-10-03T00:00:00.000Z", "description": "Pagamento de fatura", "descriptionRaw": "PAGAMENTO DE FATURA",
+  "amount": 850.9, "type": "DEBIT", "status": "POSTED", "category": "Credit card payment", "creditCardMetadata": null}
+]}

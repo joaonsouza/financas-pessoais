@@ -1,0 +1,44 @@
+{# Ícone redondo na cor do objetivo. #}
+{% macro icone_meta(m, tamanho="size-11", icone_css="size-5") %}
+  <span class="{{ tamanho }} rounded-full shrink-0 flex items-center justify-center text-white" style="background: {{ m.cor or '#10b981' }}" aria-hidden="true"><i data-lucide="{{ m.icone or 'target' }}" class="{{ icone_css }}"></i></span>
+{% endmacro %}
+
+{# Barra grossa em degradê da cor do objetivo. #}
+{% macro barra_meta(m, pct, rotulo) %}
+  {% set cor = m.cor or '#10b981' %}
+  <div class="h-3 rounded-full bg-page overflow-hidden" role="progressbar" aria-label="{{ rotulo }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ [pct, 100]|min }}">
+    <div class="h-full rounded-full" style="width: {{ [[pct, 0]|max, 100]|min }}%; background: linear-gradient(90deg, {{ cor }}99, {{ cor }})"></div>
+  </div>
+{% endmacro %}
+
+{# Cartão de um objetivo na grade (leva ao detalhe). #}
+{% macro cartao_objetivo(m, p, agendado, hoje, horizontes, mensal=none) %}
+  <a href="/planejamento/metas/{{ m.id }}" class="group bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5 flex flex-col gap-4 hover:border-primary transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 {{ '' if m.ativa else 'opacity-60' }}">
+    <div class="flex items-center gap-3">
+      {{ icone_meta(m) }}
+      <div class="min-w-0 flex-1">
+        <h3 class="font-semibold truncate">{{ m.nome }}</h3>
+        <p class="text-xs text-ink-muted">{{ horizontes[m.horizonte] }}{% if m.repete_anual %} · <span class="inline-flex items-center gap-1 rounded-full bg-primary-soft text-primary px-2 font-medium"><i data-lucide="repeat" class="size-3" aria-hidden="true"></i>anual</span>{% endif %}{% if not m.ativa %} · inativa{% endif %}</p>
+      </div>
+      <i data-lucide="chevron-right" class="size-5 text-ink-muted group-hover:text-primary" aria-hidden="true"></i>
+    </div>
+    <div>
+      {{ barra_meta(m, p.pct, m.nome) }}
+      <div class="mt-2 flex items-baseline justify-between gap-2 text-sm tabular-nums">
+        <span><span class="font-semibold">{{ p.atual|reais }}</span> <span class="text-ink-muted">guardados</span></span>
+        <span class="font-semibold" style="color: {{ m.cor or '#10b981' }}">{{ "%.2f"|format(p.pct)|replace(".", ",") }}%</span>
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center justify-between gap-2 text-sm text-ink-muted tabular-nums border-t border-line pt-3">
+      <span class="flex items-center gap-1.5"><i data-lucide="trophy" class="size-4" aria-hidden="true"></i><span class="sr-only">Alvo:</span>{{ p.alvo|reais }}</span>
+      <span class="flex items-center gap-1.5 {{ 'text-expense font-medium' if m.prazo and m.prazo < hoje and not p.concluido }}"><i data-lucide="calendar" class="size-4" aria-hidden="true"></i><span class="sr-only">Prazo:</span>{{ m.prazo|data_br if m.prazo else "Sem prazo" }}</span>
+    </div>
+    <p class="-mt-2 text-xs text-ink-muted">
+      {% if p.concluido and m.repete_anual %}<span class="text-income font-medium">Pronto para o vencimento</span>
+      {% elif p.concluido %}<span class="text-income font-medium inline-flex items-center gap-1"><i data-lucide="party-popper" class="size-3.5" aria-hidden="true"></i>Objetivo concluído</span>
+      {% elif mensal %}Guarda {{ mensal|reais }}/mês{% if m.prazo %} até {{ m.prazo|data_br }}{% endif %}{% if m.dia_pagar %} · dia {{ m.dia_pagar }}{% endif %}
+      {% elif p.necessario_mes > 0 %}Precisa guardar {{ p.necessario_mes|reais }}/mês{% if m.prazo %} até {{ m.prazo|data_br }}{% endif %}{% endif %}
+      {% if agendado > 0 %} · {{ agendado|reais }} agendado{% endif %}
+    </p>
+  </a>
+{% endmacro %}

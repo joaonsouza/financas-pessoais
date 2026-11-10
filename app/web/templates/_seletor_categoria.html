@@ -1,0 +1,84 @@
+{# Seletor de categoria com busca e grupos por mãe (static/seletor_categoria.js). Importar `with context`: usa
+   `request` para embutir as categorias em JSON, uma vez por página e tipo. #}
+{% macro seletor_categoria(name, valor="", tipo="despesa", vazio="Sem categoria", topo=[], fim=[], somente=none, placeholder="Escolha…", rotulo_aria="Categoria", criar=false) -%}
+{%- set d = dados_seletor_categoria(request, tipo) -%}
+{%- if d.primeira %}<script type="application/json" id="categorias-{{ tipo }}">{{ d.json }}</script>{% endif -%}
+{%- set v = "" if valor is none else valor|string -%}
+{%- set extras = dict(topo + fim) -%}
+{%- set atual = d.por_id.get(v) -%}
+{%- if v in extras %}{% set rotulo = extras[v] %}
+{%- elif atual %}{% set rotulo = atual.rotulo ~ (" (inativa)" if atual.inativa else "") %}
+{%- elif v == "" and vazio %}{% set rotulo = vazio %}
+{%- else %}{% set rotulo = placeholder %}{% endif -%}
+<div class="relative" data-seletor-categoria="{{ name }}"
+     x-data='seletorCategoria({{ {"tipo": tipo, "valor": v, "vazio": vazio, "topo": topo, "fim": fim, "somente": somente, "placeholder": placeholder, "criar": criar}|tojson }})'
+>
+  <input type="hidden" name="{{ name }}" value="{{ v }}" x-ref="input">
+  <button type="button" x-ref="botao" @click="aberto ? fechar() : abrir()" @keydown.arrow-down.prevent="abrir()"
+          aria-haspopup="listbox" :aria-expanded="aberto" aria-label="{{ rotulo_aria }}"
+          class="h-11 w-full rounded-xl border border-line bg-card px-3 text-ink text-left font-normal flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150">
+    <span class="size-3 rounded-full shrink-0 {{ '' if atual else 'border border-line' }}" style="{{ 'background:' ~ atual.cor if atual else '' }}"
+          :style="corAtual ? 'background:' + corAtual : ''" :class="corAtual ? '' : 'border border-line'"></span>
+    <span class="flex-1 truncate" x-text="rotuloAtual">{{ rotulo }}</span>
+    <i data-lucide="chevron-down" class="size-4 shrink-0 text-ink-muted" aria-hidden="true"></i>
+  </button>
+  <template x-teleport="body">
+    <div>
+      <div x-show="aberto" x-cloak class="fixed inset-0 z-[60] bg-black/40 sm:hidden" @click="fechar(false)"></div>
+      <div x-show="aberto" x-cloak role="dialog" aria-label="{{ rotulo_aria }}" :style="estilo"
+           @click.outside="if (!$refs.botao.contains($event.target)) fechar(false)"
+           class="fixed inset-x-0 bottom-0 z-[61] max-h-[75vh] rounded-t-2xl sm:inset-auto sm:rounded-xl bg-card border border-line shadow-xl flex flex-col overflow-hidden text-sm text-ink">
+        <div class="p-2 border-b border-line">
+          <input x-init="busca_el = $el" x-model="busca" type="search" autocomplete="off" placeholder="Buscar categoria" aria-label="Buscar categoria"
+                 @keydown.arrow-down.prevent="mover(1)" @keydown.arrow-up.prevent="mover(-1)" @keydown.enter.prevent="confirmar()"
+                 @keydown.escape.prevent.stop="fechar()" @keydown.tab="fechar(false)"
+                 class="h-11 w-full rounded-lg border border-line bg-page px-3 font-normal focus:outline-none focus:ring-4 focus:ring-primary/20">
+        </div>
+        <ul x-init="lista_el = $el" x-show="!criando" role="listbox" class="relative overflow-y-auto py-1">
+          <template x-for="(l, n) in linhas" :key="n">
+            <li>
+              <template x-if="l.titulo">
+                <div class="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-ink-muted" x-text="l.titulo"></div>
+              </template>
+              <template x-if="!l.titulo">
+                <button type="button" role="option" tabindex="-1" :aria-selected="l.valor === valor" :data-ativo="l.i === ativo"
+                        @click="escolher(l)" @mousemove="ativo = l.i"
+                        class="w-full min-h-10 flex items-center gap-2 px-3 text-left font-normal cursor-pointer"
+                        :class="[l.i === ativo ? 'bg-page' : '', l.nivel ? 'pl-7' : '']">
+                  <span class="size-3 rounded-full shrink-0" :style="l.cor ? 'background:' + l.cor : ''" :class="l.cor ? '' : 'border border-line'"></span>
+                  <span class="flex-1 truncate" x-text="l.rotulo"></span>
+                  <span x-show="l.valor === valor" class="text-primary font-semibold" aria-hidden="true">✓</span>
+                </button>
+              </template>
+            </li>
+          </template>
+          <li x-show="!opcoes.length" class="px-3 py-3 text-ink-muted">Nenhuma categoria com esse nome</li>
+        </ul>
+        <div x-show="semResultado && !criando" class="border-t border-line p-1">
+          <button type="button" @click="iniciarCriacao()" class="w-full min-h-10 px-3 rounded-lg text-left text-primary font-medium hover:bg-page cursor-pointer"
+                  x-text="'＋ Criar “' + busca.trim() + '”'"></button>
+        </div>
+        <div x-show="criando" class="flex-1 flex flex-col min-h-0">
+          <p class="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-ink-muted" x-text="'Criar “' + busca.trim() + '” dentro de:'"></p>
+          <ul class="overflow-y-auto py-1">
+            <template x-for="g in maes" :key="g.id">
+              <li>
+                <button type="button" @click="criar(g.id)" :disabled="salvando" class="w-full min-h-10 flex items-center gap-2 px-3 text-left font-normal hover:bg-page cursor-pointer disabled:opacity-50">
+                  <span class="size-3 rounded-full shrink-0" :style="'background:' + g.cor"></span><span class="flex-1 truncate" x-text="g.nome"></span>
+                </button>
+              </li>
+            </template>
+            <li>
+              <button type="button" @click="criar(null)" :disabled="salvando" class="w-full min-h-10 flex items-center gap-2 px-3 text-left font-normal hover:bg-page cursor-pointer disabled:opacity-50">
+                <span class="size-3 rounded-full shrink-0 border border-line"></span><span class="flex-1">Nenhuma (nova categoria principal)</span>
+              </button>
+            </li>
+          </ul>
+          <p x-show="erro" x-text="erro" class="px-3 pb-1 text-xs text-expense"></p>
+          <button type="button" @click="criando = false" class="mx-3 mb-2 self-start text-xs text-ink-muted hover:text-ink cursor-pointer">← Voltar</button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+{%- endmacro %}

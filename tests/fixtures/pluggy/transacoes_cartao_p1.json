@@ -1,0 +1,8 @@
+{"page": 1, "total": 4, "totalPages": 2, "results": [
+ {"id": "tx-c-001", "date": "2026-09-20T00:00:00.000Z", "description": "SUPERMERCADO EXEMPLO", "descriptionRaw": "SUPERMERCADO EXEMPLO SP",
+  "amount": 120.5, "type": "DEBIT", "status": "POSTED", "category": "Groceries",
+  "creditCardMetadata": {"installmentNumber": 1, "totalInstallments": 1, "purchaseDate": "2026-09-20T00:00:00.000Z", "billId": "bill-2026-10"}},
+ {"id": "tx-c-002", "date": "2026-09-22T00:00:00.000Z", "description": "LOJA FICTICIA", "descriptionRaw": "LOJA FICTICIA 03/10",
+  "amount": 99.9, "type": "DEBIT", "status": "POSTED", "category": "Shopping",
+  "creditCardMetadata": {"installmentNumber": 3, "totalInstallments": 10, "purchaseDate": "2026-07-22T00:00:00.000Z", "billId": "bill-2026-10"}}
+]}

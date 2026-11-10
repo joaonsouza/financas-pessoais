@@ -1,0 +1,49 @@
+{# Reserva de emergência na carteira consolidada: aparece na lista, mas fora da alocação e do rebalanceamento. #}
+{% if carteira.reserva %}
+<section x-data="{ aberto: true }" class="bg-card rounded-[20px] border-2 border-expense/60 shadow-[0_4px_6px_rgba(0,0,0,0.04)] mb-4 overflow-hidden" aria-labelledby="titulo-reserva-carteira">
+  <div class="flex flex-wrap items-center gap-3 px-5 py-4 bg-expense/10">
+    <button type="button" @click="aberto = !aberto" :aria-expanded="aberto" aria-controls="bloco-reserva"
+            class="flex flex-1 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-left cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+      <i data-lucide="chevron-down" class="size-4 text-ink-muted transition-transform duration-150" :class="aberto ? '' : '-rotate-90'"></i>
+      <i data-lucide="shield-check" class="size-5 text-primary"></i>
+      <h2 id="titulo-reserva-carteira" class="font-semibold">Reserva de emergência</h2>
+      <span class="text-sm tabular-nums text-ink-muted">{{ carteira.reserva|length }} {{ "ativo" if carteira.reserva|length == 1 else "ativos" }} · {{ carteira.reserva_saldo|reais }}{% if carteira.reserva_alvo %} de {{ carteira.reserva_alvo|reais }} ({{ carteira.reserva_pct|pct(1) }}){% endif %}</span>
+    </button>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-expense text-white px-3 py-1 text-xs font-bold uppercase tracking-wide"><i data-lucide="alert-triangle" class="size-3.5"></i>Fora da meta{% if carteira.reserva_alvo %} · meta da reserva {{ carteira.reserva_alvo|reais }}{% endif %}</span>
+  </div>
+  <div id="bloco-reserva" x-show="aberto" class="overflow-x-auto border-t border-line">
+    <p class="px-5 py-2 text-xs font-medium text-expense bg-expense/5">Esta reserva não entra na alocação por classe nem no rebalanceamento: ela tem a meta própria acima.</p>
+    <table class="w-full text-sm min-w-[560px]">
+      <thead class="text-xs text-ink-muted">
+        <tr class="border-b border-line">
+          <th scope="col" class="text-left font-medium px-5 py-2">Ativo</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Saldo</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Custo</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Rentabilidade</th>
+          <th scope="col" class="text-right font-medium px-5 py-2">% da reserva</th>
+          <th scope="col" class="px-3 py-2"><span class="sr-only">Ações</span></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-line">
+        {% for a in carteira.reserva %}
+        <tr class="hover:bg-page transition-colors duration-150">
+          <td class="px-5 py-3">
+            <a href="/investimentos/ativos/{{ a.ativo.id }}" class="font-medium text-primary hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 rounded">{{ a.ativo.codigo }}</a>
+            {% if a.ativo.nome %}<span class="block text-xs text-ink-muted truncate max-w-64">{{ a.ativo.nome }}</span>{% endif %}
+            {% if a.desatualizada %}<span class="inline-flex items-center gap-1 text-xs text-warning"><i data-lucide="alert-triangle" class="size-3"></i>cotação desatualizada</span>{% endif %}
+          </td>
+          <td class="px-3 py-3 text-right tabular-nums font-medium">{{ a.saldo|reais }}</td>
+          <td class="px-3 py-3 text-right tabular-nums text-ink-muted">{{ a.custo|reais }}</td>
+          <td class="px-3 py-3 text-right tabular-nums {{ 'text-income' if (a.rent_pct or 0) > 0 else ('text-expense' if (a.rent_pct or 0) < 0 else 'text-ink-muted') }}">{{ a.rent_brl|reais }}{% if a.rent_pct is not none %} <span class="text-xs">({{ a.rent_pct|pct }})</span>{% endif %}</td>
+          <td class="px-5 py-3 text-right tabular-nums text-ink-muted">{{ a.pct_carteira|pct(1) }}</td>
+          <td class="px-3 py-1 text-center whitespace-nowrap">
+            <button type="button" hx-get="/investimentos/operacoes/nova?ativo_id={{ a.ativo.id }}" hx-target="#modal" aria-label="Aporte ou operação em {{ a.ativo.codigo }}" title="Aporte / nova operação" class="{{ icone_btn }}"><i data-lucide="plus" class="size-4"></i></button>
+            <a href="/investimentos/ativos/{{ a.ativo.id }}" aria-label="Detalhes de {{ a.ativo.codigo }}" title="Detalhes" class="{{ icone_btn }}"><i data-lucide="more-horizontal" class="size-4"></i></a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}

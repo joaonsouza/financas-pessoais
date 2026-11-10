@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block titulo %}Dashboard{% endblock %}
+{% block cabecalho %}Dashboard{% endblock %}
+{% block acoes_topo %}
+{% set redondo = "size-11 rounded-full bg-card border border-line flex items-center justify-center text-ink-muted hover:text-primary hover:border-primary transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+<a href="/resumo?mes={{ mes }}" aria-label="Resumo do mês" title="Resumo do mês" class="{{ redondo }}"><i data-lucide="share-2" class="size-5"></i></a>
+{% endblock %}
+{% block conteudo %}
+{% if erro_backup %}
+  <div role="alert" class="mb-6 rounded-xl bg-warning/10 border border-warning/30 text-warning px-4 py-3 flex items-start gap-2">
+    <i data-lucide="alert-triangle" class="size-5 shrink-0 mt-0.5"></i>
+    <span>O último backup falhou ({{ erro_backup }}). Confira a pasta em Configurações › Backup.</span>
+  </div>
+{% endif %}
+{% if erro_migracao_metas %}
+  <div role="alert" class="mb-6 rounded-xl bg-warning/10 border border-warning/30 text-warning px-4 py-3 flex items-start gap-2">
+    <i data-lucide="alert-triangle" class="size-5 shrink-0 mt-0.5"></i>
+    <span>A conversão das provisões em metas falhou ({{ erro_migracao_metas }}). As provisões ficaram como estavam; o app tenta de novo na próxima abertura.</span>
+  </div>
+{% endif %}
+
+{% if sync_openfinance and open_finance_ativo %}
+  <p class="mb-4 text-sm text-ink-muted flex flex-wrap items-center gap-x-2 gap-y-1">
+    <i data-lucide="landmark" class="size-4 text-primary"></i>
+    <span>Última sincronização: {{ sync_openfinance }}</span>
+    <a href="/importar" class="inline-flex items-center gap-1 h-11 px-2 rounded-xl text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Sincronizar<i data-lucide="arrow-right" class="size-4"></i></a>
+  </p>
+{% endif %}
+
+{% if alertas %}
+  <section class="mb-4 bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5" aria-labelledby="titulo-alertas">
+    <div class="flex items-center justify-between mb-3">
+      <h2 id="titulo-alertas" class="font-semibold flex items-center gap-2"><i data-lucide="bell" class="size-5 text-primary"></i>Alertas do mês</h2>
+      {% if alertas|length > 3 %}
+        <a href="/desempenho?mes={{ mes }}#alertas" class="text-xs font-medium text-primary hover:underline flex items-center gap-1">Ver todos ({{ alertas|length }})<i data-lucide="arrow-right" class="size-3.5"></i></a>
+      {% endif %}
+    </div>
+    <ul class="divide-y divide-line text-sm">
+      {% for a in alertas[:3] %}
+        {% set cores = {"perigo": "bg-expense/10 text-expense", "atencao": "bg-warning/10 text-warning", "info": "bg-primary-soft text-primary"} %}
+        {% set icones = {"perigo": "alert-octagon", "atencao": "alert-triangle", "info": "info"} %}
+        <li class="flex flex-wrap items-center gap-3 py-3">
+          <span class="size-9 rounded-full flex items-center justify-center shrink-0 {{ cores[a.nivel] }}"><i data-lucide="{{ icones[a.nivel] }}" class="size-5"></i></span>
+          <span class="flex-1 min-w-48"><span class="block font-medium">{{ a.titulo }}</span><span class="block text-ink-muted">{{ a.texto }}</span></span>
+          <a href="{{ a.acao_url }}" class="inline-flex items-center gap-1 h-11 px-3 rounded-xl text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Ver<i data-lucide="arrow-right" class="size-4"></i></a>
+          <form method="post" action="/planejamento/alertas/dispensar">
+            <input type="hidden" name="mes" value="{{ mes }}"><input type="hidden" name="chave" value="{{ a.chave }}">
+            <button class="inline-flex items-center gap-1 h-11 px-3 rounded-xl text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" aria-label="Dispensar alerta: {{ a.titulo }}"><i data-lucide="x" class="size-4"></i>Dispensar</button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+    {% if alertas|length > 3 %}
+      <div class="mt-3 pt-3 border-t border-line text-center">
+        <a href="/desempenho?mes={{ mes }}#alertas" class="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1">
+          Ver todos os {{ alertas|length }} alertas na central de desempenho <i data-lucide="arrow-right" class="size-4"></i>
+        </a>
+      </div>
+    {% endif %}
+  </section>
+{% endif %}
+
+
+{% set esquerda = blocos|selectattr("visivel")|selectattr("coluna", "equalto", "esquerda")|list %}
+{% set direita = blocos|selectattr("visivel")|selectattr("coluna", "equalto", "direita")|list %}
+{# cada bloco num invólucro arrastável; "Organizar" liga o arrastar e salva a ordem e a coluna sozinho #}
+{% macro zona(nome, lista, classe) %}
+  <div data-zona="{{ nome }}" @dragover="sobre($event, $el)" @drop.prevent="soltar()"
+       class="{{ classe }}" :class="organizando && 'min-h-24 rounded-[20px] border-2 border-dashed border-line p-2'">
+    {% for b in lista %}
+      {% set html %}{% include "dashboard/blocos/" ~ b.id ~ ".html" %}{% endset %}
+      {% if html|trim %}
+      <div data-bloco="{{ b.id }}" :draggable="organizando" @dragstart="iniciar($event)" @dragend="soltar()" class="relative">
+        {{ html }}
+        <div x-show="organizando" x-cloak class="absolute inset-0 z-10 rounded-[20px] bg-primary/5 border-2 border-dashed border-primary/50 cursor-move flex items-start justify-end p-3">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-card border border-line px-3 py-1 text-xs font-medium text-ink shadow"><i data-lucide="grip-vertical" class="size-4"></i>{{ b.titulo }}</span>
+        </div>
+      </div>
+      {% else %}
+      <div data-bloco="{{ b.id }}" hidden></div>
+      {% endif %}
+    {% endfor %}
+  </div>
+{% endmacro %}
+<div x-data='organizarTela({{ blocos_json|tojson }})' class="space-y-4">
+  <div class="flex justify-end -mb-2">
+    <button type="button" @click="organizando = !organizando" :aria-pressed="organizando"
+            class="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-sm cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+            :class="organizando ? 'bg-primary text-white' : 'text-ink-muted hover:bg-card hover:text-primary'">
+      <i data-lucide="move" class="size-4"></i><span x-text="organizando ? 'Concluir' : 'Organizar cards'">Organizar cards</span>
+    </button>
+  </div>
+  <p x-show="organizando" x-cloak class="text-sm text-ink-muted">Arraste os cards para mudar a ordem ou a coluna (topo, esquerda ou direita). Tudo é salvo na hora.</p>
+  {{ zona("topo", blocos|selectattr("visivel")|selectattr("coluna", "equalto", "topo")|list, "space-y-4") }}
+  <div class="grid grid-cols-1 gap-4 items-start {{ 'lg:grid-cols-2' if esquerda and direita }}" :class="organizando && 'lg:grid-cols-2'">
+    {{ zona("esquerda", esquerda, "space-y-4 min-w-0") }}
+    {{ zona("direita", direita, "space-y-4 min-w-0") }}
+  </div>
+</div>
+
+{# Gerenciar tela inicial: quais blocos aparecem e em que ordem #}
+<div x-data='telaInicial({{ blocos_json|tojson }})' x-init="if (location.hash === '#gerenciar') aberto = true" class="mt-6 flex justify-center">
+  <button type="button" @click="aberto = true" class="inline-flex items-center gap-1.5 h-11 px-4 rounded-xl text-sm text-ink-muted hover:bg-card hover:text-primary transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+    <i data-lucide="layout-dashboard" class="size-4"></i>Gerenciar tela inicial
+  </button>
+
+  <div x-show="aberto" x-cloak class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 bg-black/50 overflow-y-auto" @keydown.escape.window="aberto = false">
+    <form method="post" action="/tela-inicial" @click.outside="aberto = false" role="dialog" aria-modal="true" aria-labelledby="titulo-tela-inicial"
+          class="w-full max-w-lg bg-card rounded-[20px] border border-line shadow-2xl p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 id="titulo-tela-inicial" class="text-lg font-semibold">Gerenciar tela inicial</h2>
+        <button type="button" @click="aberto = false" aria-label="Fechar" class="size-11 -mr-2 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page cursor-pointer"><i data-lucide="x" class="size-5"></i></button>
+      </div>
+      <p class="text-sm text-ink-muted">Marque os blocos que aparecem, escolha a coluna de cada um e use as setas para mudar a ordem. Os alertas do mês sempre aparecem.</p>
+      {% for chave, rotulo in colunas.items() %}
+        <fieldset>
+          <legend class="text-xs font-semibold uppercase tracking-wide text-ink-muted mb-1">{{ rotulo }}</legend>
+          <ul class="divide-y divide-line border border-line rounded-xl">
+            <template x-for="(b, i) in daColuna('{{ chave }}')" :key="b.id">
+              <li class="flex items-center gap-2 pl-3 pr-1 py-1">
+                <input type="hidden" name="ordem" :value="b.id">
+                <input type="hidden" :name="'coluna_' + b.id" :value="b.coluna">
+                <label class="flex-1 flex items-center gap-3 min-h-11 cursor-pointer">
+                  <input type="checkbox" name="visivel" :value="b.id" x-model="b.visivel" class="size-5 accent-primary cursor-pointer">
+                  <span x-text="b.titulo" class="text-sm"></span>
+                </label>
+                <select x-model="b.coluna" @change="$nextTick(() => window.lucide && lucide.createIcons())" :aria-label="'Coluna de ' + b.titulo"
+                        class="h-11 max-w-36 rounded-xl border border-line bg-card px-2 text-sm text-ink focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary cursor-pointer">
+                  {% for k, r in colunas.items() %}<option value="{{ k }}">{{ r }}</option>{% endfor %}
+                </select>
+                <button type="button" @click="mover(b, -1)" :disabled="i === 0" :aria-label="'Subir ' + b.titulo"
+                        class="size-11 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page disabled:opacity-30 disabled:cursor-default cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="arrow-up" class="size-4"></i></button>
+                <button type="button" @click="mover(b, 1)" :disabled="i === daColuna('{{ chave }}').length - 1" :aria-label="'Descer ' + b.titulo"
+                        class="size-11 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page disabled:opacity-30 disabled:cursor-default cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="arrow-down" class="size-4"></i></button>
+              </li>
+            </template>
+          </ul>
+        </fieldset>
+      {% endfor %}
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+        <button type="submit" name="restaurar" value="1" class="h-11 px-3 rounded-xl text-sm text-ink-muted hover:bg-page cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Restaurar padrão</button>
+        <button type="submit" class="h-11 px-5 rounded-xl bg-primary text-white font-semibold hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Organizar arrastando: reordena o DOM enquanto arrasta e, ao soltar, salva ordem e coluna de cada card.
+  function organizarTela(blocos) {
+    return {
+      organizando: false, arrastando: null, blocos,
+      iniciar(e) {
+        if (!this.organizando) return;
+        this.arrastando = e.currentTarget;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", this.arrastando.dataset.bloco);
+        this.arrastando.classList.add("opacity-50");
+      },
+      sobre(e, zona) {
+        if (!this.arrastando) return;
+        e.preventDefault();
+        const outros = [...zona.querySelectorAll(":scope > [data-bloco]:not([hidden])")].filter((x) => x !== this.arrastando);
+        const depois = outros.find((x) => { const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+        zona.insertBefore(this.arrastando, depois || null);
+      },
+      soltar() {
+        if (!this.arrastando) return;
+        this.arrastando.classList.remove("opacity-50");
+        this.arrastando = null;
+        this.salvar();
+      },
+      async salvar() {
+        const dados = new URLSearchParams();  // formulário comum (o mesmo do Gerenciar)
+        const vistos = new Set();
+        for (const zona of this.$root.querySelectorAll("[data-zona]")) {  // $root: o $el seria o card arrastado
+          for (const el of zona.querySelectorAll(":scope > [data-bloco]")) {
+            const id = el.dataset.bloco;
+            vistos.add(id);
+            dados.append("ordem", id); dados.append("visivel", id); dados.append("coluna_" + id, zona.dataset.zona);
+          }
+        }
+        for (const b of this.blocos) {  // escondidos no "Gerenciar": continuam escondidos, no fim
+          if (!vistos.has(b.id)) { dados.append("ordem", b.id); dados.append("coluna_" + b.id, b.coluna); }
+        }
+        try { await fetch("/tela-inicial", { method: "POST", body: dados, headers: { "X-Organizar": "1" } }); } catch (e) { /* tenta de novo no próximo arraste */ }
+      },
+    };
+  }
+
+  function telaInicial(blocos) {
+    return {
+      aberto: false,
+      blocos,
+      daColuna(coluna) { return this.blocos.filter((b) => b.coluna === coluna); },
+      // troca de lugar com o vizinho da mesma coluna
+      mover(bloco, passo) {
+        const coluna = this.daColuna(bloco.coluna);
+        const vizinho = coluna[coluna.indexOf(bloco) + passo];
+        if (!vizinho) return;
+        const a = this.blocos.indexOf(bloco), b = this.blocos.indexOf(vizinho);
+        [this.blocos[a], this.blocos[b]] = [this.blocos[b], this.blocos[a]];
+        this.$nextTick(() => window.lucide && lucide.createIcons());
+      },
+    };
+  }
+</script>
+{% if fatias and blocos|selectattr("id", "equalto", "categorias")|selectattr("visivel")|list %}
+<script src="/static/vendor/chart.umd.js"></script>
+<script>
+  const dados = {{ grafico|tojson }};
+  const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const totalEl = document.getElementById("grafico-total");
+  if (totalEl) totalEl.textContent = brl(dados.valores.reduce((a, b) => a + Number(b), 0));
+  new Chart(document.getElementById("grafico-categorias"), {
+    type: "doughnut",
+    data: { labels: dados.rotulos, datasets: [{ data: dados.valores, backgroundColor: dados.cores, borderWidth: 0 }] },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (c) => c.label + ": " + brl(c.parsed) } },
+      },
+      cutout: "70%",
+    },
+  });
+</script>
+{% endif %}
+{% endblock %}

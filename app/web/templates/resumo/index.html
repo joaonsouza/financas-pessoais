@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resumo de {{ mes|nome_mes }} · Finanças</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/static/app.css?v={{ versao_css() }}">
+  <script defer src="/static/vendor/alpine.min.js"></script>
+  <script src="/static/vendor/lucide.min.js"></script>
+  <script src="/static/vendor/html-to-image.js"></script>
+</head>
+<body class="bg-page text-ink min-h-screen font-sans flex flex-col items-center gap-4 py-6 px-4">
+  {% set p = r.pra_gastar %}
+  {% set gr = r.gasto_receita %}
+  {% set c = r.comparacao %}
+  {% set linha = "flex items-start gap-3" %}
+  {% set icone = "size-5 shrink-0 mt-0.5 text-ink-muted" %}
+  {% set rotulo = "text-sm text-ink-muted" %}
+  {% set redondo = "size-11 rounded-full border border-line bg-card flex items-center justify-center text-ink-muted hover:text-primary hover:border-primary transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+  {% set botao = "h-11 px-4 rounded-xl border border-line bg-card text-sm font-medium flex items-center justify-center gap-2 text-ink hover:text-primary hover:border-primary transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+
+  <article id="boletim" class="w-full max-w-[420px] bg-card rounded-[24px] border border-line p-6 space-y-6">
+    <header class="flex items-center gap-3">
+      <span class="size-11 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0"><i data-lucide="house" class="size-5"></i></span>
+      <div class="min-w-0">
+        <h1 class="text-lg font-semibold leading-tight">Casa · {{ mes|nome_mes }}</h1>
+        <p class="text-xs text-ink-muted">gerado em {{ agora.strftime("%d/%m às %H:%M") }}</p>
+      </div>
+    </header>
+
+    <section>
+      <p class="{{ rotulo }}">Gastos vs. receita</p>
+      <p class="text-4xl font-semibold tabular-nums mt-1 {{ 'text-expense' if gr.saldo < 0 }}">{{ gr.gasto|reais }}</p>
+      {% if gr.receita > 0 %}
+        <p class="{{ rotulo }} mt-1 tabular-nums">de {{ gr.receita|reais }} ({{ gr.pct }}%)</p>
+        <div class="relative mt-4 h-2 rounded-full bg-page overflow-hidden" role="presentation">
+          <div class="h-full rounded-full {{ 'bg-expense' if gr.pct > 100 else 'bg-primary' }}" style="width: {{ [gr.pct, 100]|min }}%"></div>
+          {% if gr.pct > 100 %}<div class="absolute inset-y-0 right-0 w-0.5 bg-ink"></div>{% endif %}
+        </div>
+      {% else %}
+        <p class="{{ rotulo }} mt-1">Sem receita lançada no mês</p>
+      {% endif %}
+      {% if gr.saldo >= 0 %}
+        {% if gr.receita > 0 or gr.gasto > 0 %}
+          <p class="mt-4 flex items-center gap-2 font-semibold text-income tabular-nums"><i data-lucide="check-circle" class="size-5 shrink-0"></i>Sobram {{ gr.saldo|reais }}</p>
+        {% endif %}
+      {% else %}
+        <p class="mt-4 flex items-start gap-2 font-semibold text-expense tabular-nums">
+          <i data-lucide="alert-triangle" class="size-5 shrink-0 mt-0.5"></i>
+          <span>Faltam {{ (-gr.saldo)|reais }}{% if gr.reserva_atual is not none %} → sai da reserva{% endif %}
+            {% if gr.frase_reserva %}<span class="block text-sm font-normal text-ink-muted">({{ gr.frase_reserva }})</span>{% endif %}</span>
+        </p>
+      {% endif %}
+    </section>
+
+    <div class="space-y-5 border-t border-line pt-5">
+      <div class="{{ linha }}">
+        <i data-lucide="landmark" class="{{ icone }}"></i>
+        <p class="flex-1 {{ rotulo }}">Nas contas no fim do mês</p>
+        <p class="font-semibold tabular-nums {{ 'text-expense' if r.saldo_previsto < 0 else 'text-income' }}">{{ r.saldo_previsto|reais }}</p>
+      </div>
+
+      {% if r.cartoes_total > 0 or r.melhor_cartao %}
+        <div class="{{ linha }}">
+          <i data-lucide="credit-card" class="{{ icone }}"></i>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-baseline justify-between gap-3">
+              <p class="{{ rotulo }}">Cartões no mês</p>
+              <p class="font-semibold tabular-nums">{{ r.cartoes_total|reais }}</p>
+            </div>
+            {% if r.melhor_cartao %}
+              <p class="text-sm text-ink-muted tabular-nums">hoje use o {{ r.melhor_cartao.cartao.nome }} (vence {{ r.melhor_cartao.vencimento.strftime("%d/%m") }})</p>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if p %}
+        {% set pct_barra = [p.pct_usado, 100]|min %}
+        {% set cor = 'bg-expense' if p.pct_usado >= 100 else ('bg-warning' if p.pct_usado >= 80 else 'bg-income') %}
+        <div class="{{ linha }}">
+          <i data-lucide="gauge" class="{{ icone }}"></i>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-baseline justify-between gap-3">
+              <p class="{{ rotulo }}">Limite de gastos do mês</p>
+              <p class="font-semibold tabular-nums">{{ p.teto|reais }}</p>
+            </div>
+            {% if p.automatico %}<p class="text-xs text-ink-muted">calculado a partir da receita</p>{% endif %}
+            <div class="mt-2 h-1.5 rounded-full bg-page overflow-hidden" role="presentation">
+              <div class="h-full rounded-full {{ cor }}" style="width: {{ pct_barra }}%"></div>
+            </div>
+            <div class="mt-2 flex items-baseline justify-between gap-3 text-sm tabular-nums">
+              <span class="text-ink-muted">Gastamos</span>
+              <span class="font-semibold">{{ p.gasto|reais }} <span class="font-normal text-ink-muted">({{ p.pct_usado }}% do limite)</span></span>
+            </div>
+            <div class="mt-1 flex items-baseline justify-between gap-3 text-sm tabular-nums">
+              <span class="text-ink-muted">Só de parcelas</span>
+              <span class="font-semibold">{{ p.parcelas|reais }}</span>
+            </div>
+            <p class="mt-2 text-sm font-semibold tabular-nums {{ 'text-expense' if p.restante < 0 else 'text-income' if p.restante > 0 else 'text-ink' }}">
+              {% if p.fase == "passado" %}
+                {% if p.restante < 0 %}Fechamos o mês {{ (-p.restante)|reais }} acima do limite{% else %}Fechamos o mês {{ p.restante|reais }} abaixo do limite{% endif %}
+              {% elif p.restante < 0 %}
+                Passamos do limite em {{ (-p.restante)|reais }}
+              {% elif p.restante > 0 %}
+                Ainda dá para gastar {{ p.restante|reais }}{% if p.por_dia %} <span class="font-normal text-ink-muted">({{ p.por_dia|reais }} por dia)</span>{% endif %}
+              {% else %}
+                Chegamos exatamente no limite
+              {% endif %}
+            </p>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if r.reserva %}
+        {% set rv = r.reserva %}
+        <div class="{{ linha }}">
+          <i data-lucide="shield-check" class="{{ icone }}"></i>
+          <div class="flex-1 min-w-0">
+            <p class="{{ rotulo }}">Reserva de emergência</p>
+            <p class="font-semibold tabular-nums">{{ rv.atual|reais }} <span class="font-normal text-ink-muted">de {{ rv.alvo|reais }}</span></p>
+            <div class="mt-2 h-1.5 rounded-full bg-page overflow-hidden" role="presentation">
+              <div class="h-full rounded-full bg-income" style="width: {{ rv.pct }}%"></div>
+            </div>
+            {% if rv.meses_que_aguento is not none %}
+              <p class="text-sm text-ink-muted mt-1 tabular-nums">cobre {{ ("%.1f"|format(rv.meses_que_aguento))|replace(".", ",") }} meses</p>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if r.outras_reservas %}
+        <div class="{{ linha }}">
+          <i data-lucide="trending-up" class="{{ icone }}"></i>
+          <p class="flex-1 {{ rotulo }}">Investimentos e outras caixinhas</p>
+          <p class="text-sm font-medium tabular-nums text-income">{{ r.outras_reservas|reais }}</p>
+        </div>
+      {% endif %}
+
+      {% if r.alertas %}
+        <div class="{{ linha }}">
+          <i data-lucide="alert-triangle" class="size-5 shrink-0 mt-0.5 text-warning"></i>
+          <div class="flex-1 min-w-0">
+            <p class="{{ rotulo }}">Atenção</p>
+            <ul class="mt-1 space-y-1">
+              {% for a in r.alertas %}
+                <li class="font-medium {{ 'text-expense' if a.nivel == 'perigo' else 'text-warning' }}">{{ a.titulo }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      {% elif (not p or p.restante >= 0) and gr.saldo >= 0 %}
+        <div class="{{ linha }}">
+          <i data-lucide="check-circle" class="size-5 shrink-0 mt-0.5 text-income"></i>
+          <p class="font-semibold text-income">Tudo em dia</p>
+        </div>
+      {% endif %}
+
+      {% if c %}
+        <div class="{{ linha }}">
+          <i data-lucide="bar-chart-3" class="{{ icone }}"></i>
+          <div class="flex-1 min-w-0">
+            <p class="{{ rotulo }}">{{ "Gasto até dia %d"|format(c.ate_dia) if c.ate_dia else "Gasto no mês" }}</p>
+            <p class="font-semibold tabular-nums">{{ c.atual|reais }}</p>
+            <p class="text-sm tabular-nums {{ 'text-expense' if c.pct > 0 else ('text-income' if c.pct < 0 else 'text-ink-muted') }}">
+              {{ "↑" if c.pct > 0 else ("↓" if c.pct < 0 else "=") }} {{ c.pct|abs }}% vs {{ c.mes_anterior }}
+            </p>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </article>
+
+  <div class="w-full max-w-[420px] flex flex-wrap gap-2 justify-center" x-data="boletim()">
+    <nav class="w-full flex items-center justify-between gap-2" aria-label="Mês do resumo">
+      <a href="/resumo?mes={{ somar_meses(mes, -1) }}" aria-label="Mês anterior" title="Mês anterior" class="{{ redondo }}"><i data-lucide="chevron-left" class="size-5"></i></a>
+      <a href="/resumo?mes={{ mes_hoje() }}" class="{{ botao }}">Hoje</a>
+      <a href="/resumo?mes={{ somar_meses(mes, 1) }}" aria-label="Próximo mês" title="Próximo mês" class="{{ redondo }}"><i data-lucide="chevron-right" class="size-5"></i></a>
+    </nav>
+    <button type="button" @click="copiarImagem()" class="{{ botao }} bg-primary text-white border-primary hover:text-white"><i data-lucide="image" class="size-4"></i>Copiar imagem</button>
+    <button type="button" @click="baixarImagem()" class="{{ botao }}"><i data-lucide="download" class="size-4"></i>Baixar imagem</button>
+    <button type="button" @click="copiarTexto()" class="{{ botao }}"><i data-lucide="message-circle" class="size-4"></i>Copiar texto</button>
+    <a href="/?mes={{ mes }}" class="{{ botao }}"><i data-lucide="arrow-left" class="size-4"></i>Voltar</a>
+    <p x-show="aviso" x-cloak x-text="aviso" role="status" class="w-full text-center text-sm text-ink-muted"></p>
+  </div>
+
+    <script>
+    const TEXTO_WHATSAPP = {{ texto|tojson }};
+    function boletim() {
+      const alvo = () => document.getElementById("boletim");
+      const opcoes = () => ({ pixelRatio: 2, backgroundColor: getComputedStyle(alvo()).backgroundColor });
+      return {
+        aviso: "",
+        async copiarImagem() {
+          try {
+            const blob = await htmlToImage.toBlob(alvo(), opcoes());
+            await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+            this.aviso = "Imagem copiada. Cole no WhatsApp.";
+          } catch (e) { this.aviso = "Não deu para copiar a imagem aqui; use Baixar imagem."; }
+        },
+        async baixarImagem() {
+          try {
+            const url = await htmlToImage.toPng(alvo(), opcoes());
+            const a = document.createElement("a");
+            a.href = url; a.download = "resumo-{{ mes }}.png"; a.click();
+            this.aviso = "Imagem baixada.";
+          } catch (e) { this.aviso = "Não deu para gerar a imagem."; }
+        },
+        async copiarTexto() {
+          try {
+            await navigator.clipboard.writeText(TEXTO_WHATSAPP);
+            this.aviso = "Texto copiado. Cole no WhatsApp.";
+          } catch (e) { this.aviso = "Não deu para copiar o texto aqui."; }
+        },
+      };
+    }
+    document.addEventListener("DOMContentLoaded", () => window.lucide && lucide.createIcons());
+  </script>
+</body>
+</html>

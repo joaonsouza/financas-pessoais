@@ -1,0 +1,5 @@
+<button type="button" hx-post="/lancamentos/favoritos" hx-include="closest form" hx-target="this" hx-swap="outerHTML"
+        aria-label="{{ 'Remover dos favoritos' if favorito else 'Favoritar descrição' }}" title="{{ 'Remover dos favoritos' if favorito else 'Favoritar descrição' }}"
+        class="size-11 shrink-0 rounded-xl flex items-center justify-center text-ink-muted hover:text-expense hover:bg-expense/10 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+  <i data-lucide="heart" class="size-5 {{ 'fill-current text-expense' if favorito }}"></i>
+</button>

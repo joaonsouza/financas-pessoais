@@ -1,0 +1,14 @@
+{# Transferência entre contas numa linha só (celular). #}
+<button type="button" hx-get="/lancamentos/{{ l.id }}/editar" hx-target="#modal" id="transf-{{ l.id }}"
+   class="group w-full text-left flex items-center gap-x-3 px-3 sm:px-4 py-2 min-h-[3.75rem] hover:bg-page/60 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-primary/30">
+  <span class="size-5 shrink-0" aria-hidden="true"></span>
+  <span class="size-11 shrink-0 flex items-center justify-center">
+    <span class="size-6 rounded-full border-2 flex items-center justify-center {{ 'border-ink-muted/50 text-transparent' if l.status == 'pendente' else 'bg-income border-income text-white' }}"><i data-lucide="check" class="size-4"></i></span>
+  </span>
+  <span class="size-10 rounded-full shrink-0 flex items-center justify-center bg-page text-ink-muted"><i data-lucide="{{ 'target' if l.aporte_meta_id else 'arrow-left-right' }}" class="size-5"></i></span>
+  <span class="flex-1 min-w-[8rem]">
+    <span class="block font-medium truncate">{{ l.descricao }}</span>
+    <span class="block text-xs text-ink-muted truncate">{{ l.origem_nome }} → {{ l.destino_nome }}</span>
+  </span>
+  <span class="font-semibold tabular-nums shrink-0">{{ l.valor|reais }}</span>
+</button>

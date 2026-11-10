@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block titulo %}Assinaturas{% endblock %}
+{% block cabecalho %}Assinaturas{% endblock %}
+{% block conteudo %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set botao_texto = "inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set botao_perigo = "inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-ink-muted hover:text-expense hover:bg-expense/10 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set rotulo_css = "flex flex-col gap-1 font-medium text-ink-muted" %}
+{% set intervalos = [(1, "Todo mês"), (2, "A cada 2 meses"), (3, "A cada 3 meses"), (4, "A cada 4 meses"), (5, "A cada 5 meses"), (6, "A cada 6 meses"), (7, "A cada 7 meses"), (8, "A cada 8 meses"), (9, "A cada 9 meses"), (10, "A cada 10 meses"), (11, "A cada 11 meses"), (12, "Anual")] %}
+{% set rotulo_padrao = "Texto que reconhece a cobrança no extrato" %}
+{% if erro %}
+  <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+<a href="/lancamentos" class="inline-flex items-center gap-1.5 text-sm text-primary font-medium hover:underline mb-4"><i data-lucide="arrow-left" class="size-4"></i>Voltar para Lançamentos</a>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Ativas</div><div class="text-2xl font-semibold tabular-nums">{{ painel.qtd_ativas }}</div><div class="text-xs text-ink-muted">{{ painel.qtd_canceladas }} canceladas</div></div>
+  <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Por mês</div><div class="text-2xl font-semibold tabular-nums">{{ painel.custo_mensal|reais }}</div></div>
+  <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Por ano</div><div class="text-2xl font-semibold tabular-nums">{{ painel.custo_anual|reais }}</div></div>
+  <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Gasto real nos últimos 12 meses</div><div class="text-2xl font-semibold tabular-nums">{{ painel.gasto_12m|reais }}</div></div>
+</div>
+
+{% if painel.ativas|selectattr("reajuste")|list or painel.ativas|selectattr("sem_cobranca")|list or painel.canceladas|selectattr("ainda_cobrando")|list %}
+<h2 class="font-semibold mb-2 flex items-center gap-2"><i data-lucide="alert-triangle" class="size-5 text-primary"></i>Atenção</h2>
+<section class="{{ cartao_css }} divide-y divide-line mb-6" aria-label="Atenção">
+  {% for it in painel.ativas if it.reajuste %}
+  <p class="px-4 py-3 text-sm">{{ it.assinatura.nome }}: a última cobrança foi {{ it.ultimo_valor|reais }}, e o valor cadastrado é {{ it.assinatura.valor|reais }}.</p>
+  {% endfor %}
+  {% for it in painel.ativas if it.sem_cobranca %}
+  <div class="px-4 py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-1">
+    <span class="flex-1 min-w-40">{{ it.assinatura.nome }}: sem cobrança nos últimos meses. Ainda está ativa?</span>
+    <form method="post" action="/lancamentos/assinaturas/{{ it.assinatura.id }}/cancelar"><button class="{{ botao_perigo }}"><i data-lucide="circle-stop" class="size-4"></i>Cancelar</button></form>
+  </div>
+  {% endfor %}
+  {% for it in painel.canceladas if it.ainda_cobrando %}
+  <div class="px-4 py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-1">
+    <span class="flex-1 min-w-40">{{ it.assinatura.nome }} está cancelada, mas continua sendo cobrada (última em {{ it.ultima_data|data_br }}).</span>
+    <form method="post" action="/lancamentos/assinaturas/{{ it.assinatura.id }}/reativar"><button class="{{ botao_texto }}"><i data-lucide="rotate-ccw" class="size-4"></i>Reativar</button></form>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<h2 class="font-semibold mb-2 flex items-center gap-2"><i data-lucide="credit-card" class="size-5 text-primary"></i>Assinaturas ativas ({{ painel.qtd_ativas }})</h2>
+<section class="{{ cartao_css }} divide-y divide-line mb-6" aria-label="Assinaturas ativas">
+  {% for it in painel.ativas %}
+  {% set a = it.assinatura %}
+  <div x-data="{ editando: false }" class="px-4 py-3 text-sm">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <span class="font-medium flex-1 min-w-40">{{ a.nome }}
+        {% if it.reajuste %}<span class="text-xs font-medium text-expense">reajuste</span>{% endif %}
+        {% if it.sem_cobranca %}<span class="text-xs font-medium text-expense">sem cobrança</span>{% endif %}</span>
+      <span class="text-ink-muted">{{ contas_por_id[a.conta_id].nome }}</span>
+      <span class="tabular-nums w-36 text-right">{{ a.valor|reais }}{% if a.intervalo_meses == 1 %}/mês{% elif a.intervalo_meses == 12 %}/ano{% else %} a cada {{ a.intervalo_meses }} meses{% endif %}</span>
+      <span class="text-xs text-ink-muted w-48">{% if it.ultima_data %}última: {{ it.ultima_data|data_br }} ({{ it.ultimo_valor|reais }}){% else %}sem cobrança ainda{% endif %}</span>
+      <span class="text-xs text-ink-muted tabular-nums w-32 text-right">{{ it.cobrado_12m|reais }} em 12 meses</span>
+      <button type="button" @click="editando = !editando" :aria-expanded="editando" class="{{ botao_texto }}"><i data-lucide="pencil" class="size-4"></i>Editar</button>
+      <details class="relative">
+        <summary class="{{ botao_perigo }} list-none"><i data-lucide="circle-stop" class="size-4"></i>Cancelar</summary>
+        <form method="post" action="/lancamentos/assinaturas/{{ a.id }}/cancelar" class="flex gap-2 items-end mt-2">
+          <label class="{{ rotulo_css }}">Cancelada em<input type="date" name="em" value="{{ hoje.isoformat() }}" class="{{ campo }}"></label>
+          <button class="{{ botao_perigo }}">Confirmar</button>
+        </form>
+      </details>
+    </div>
+    <div x-show="editando" x-cloak class="mt-3">
+      <form method="post" action="/lancamentos/assinaturas/{{ a.id }}" class="flex flex-wrap gap-3 items-end">
+        <label class="{{ rotulo_css }}">Nome<input name="nome" value="{{ a.nome }}" required class="{{ campo }}"></label>
+        <label class="{{ rotulo_css }}">Valor<input data-mascara="reais" name="valor" value="{{ a.valor|reais_input }}" inputmode="decimal" required class="{{ campo }} w-28"></label>
+        <label class="{{ rotulo_css }}">Cartão
+          <select name="conta_id" class="{{ campo }}">{% for c in cartoes %}<option value="{{ c.id }}" {% if c.id == a.conta_id %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}</select>
+        </label>
+        <label class="{{ rotulo_css }}">Repete
+          <select name="intervalo_meses" class="{{ campo }}">{% for k, r in intervalos %}<option value="{{ k }}" {% if k == a.intervalo_meses %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+        </label>
+        <label class="{{ rotulo_css }}">Dia<input name="dia" value="{{ a.dia or '' }}" inputmode="numeric" class="{{ campo }} w-20"></label>
+        <label class="{{ rotulo_css }}">{{ rotulo_padrao }}<input name="padrao" value="{{ a.padrao }}" class="{{ campo }}"></label>
+        <label class="{{ rotulo_css }}">Observação<input name="observacao" value="{{ a.observacao or '' }}" class="{{ campo }}"></label>
+        <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <p class="px-4 py-3 text-sm text-ink-muted">Nenhuma assinatura cadastrada.</p>
+  {% endfor %}
+</section>
+
+{% if painel.sugestoes %}
+<h2 class="font-semibold mb-2 flex items-center gap-2"><i data-lucide="lightbulb" class="size-5 text-primary"></i>Sugestões para incluir</h2>
+<section class="{{ cartao_css }} divide-y divide-line mb-6" aria-label="Sugestões para incluir">
+  {% for sug in painel.sugestoes %}
+  <div class="px-4 py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-1">
+    <span class="font-medium flex-1 min-w-40">{{ sug.descricao }}</span>
+    <span class="tabular-nums">{{ sug.valor|reais }}</span>
+    <span class="text-ink-muted">{{ sug.meses|length }} meses seguidos</span>
+    <span class="text-ink-muted">{{ contas_por_id[sug.conta_id].nome }}</span>
+    <form method="post" action="/lancamentos/assinaturas/sugestoes/cadastrar">
+      <input type="hidden" name="descricao" value="{{ sug.descricao }}"><input type="hidden" name="conta_id" value="{{ sug.conta_id }}">
+      <button class="{{ botao_texto }}"><i data-lucide="plus" class="size-4"></i>Cadastrar</button>
+    </form>
+    <form method="post" action="/lancamentos/assinaturas/sugestoes/ignorar">
+      <input type="hidden" name="descricao" value="{{ sug.descricao }}"><input type="hidden" name="conta_id" value="{{ sug.conta_id }}">
+      <button class="{{ botao_perigo }}">Ignorar</button>
+    </form>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if painel.canceladas %}
+<h2 class="font-semibold mb-2 flex items-center gap-2"><i data-lucide="circle-stop" class="size-5 text-primary"></i>Canceladas ({{ painel.qtd_canceladas }})</h2>
+<section class="{{ cartao_css }} divide-y divide-line mb-6" aria-label="Canceladas">
+  {% for it in painel.canceladas %}
+  {% set a = it.assinatura %}
+  <div class="px-4 py-3 text-sm opacity-75 flex flex-wrap items-center gap-x-4 gap-y-1">
+    <span class="font-medium flex-1 min-w-40">{{ a.nome }}</span>
+    <span class="text-ink-muted">{{ contas_por_id[a.conta_id].nome }}</span>
+    <span class="tabular-nums">{{ a.valor|reais }}</span>
+    <span class="text-xs text-ink-muted">cancelada em {{ a.cancelada_em|data_br }}</span>
+    <form method="post" action="/lancamentos/assinaturas/{{ a.id }}/reativar"><button class="{{ botao_texto }}"><i data-lucide="rotate-ccw" class="size-4"></i>Reativar</button></form>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<details class="{{ cartao_css }} p-5">
+  <summary class="cursor-pointer font-medium flex items-center gap-2 min-h-11 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 rounded-xl"><i data-lucide="plus" class="size-4"></i>Nova assinatura</summary>
+  <form method="post" action="/lancamentos/assinaturas" class="mt-4 flex flex-wrap gap-3 items-end text-sm">
+    <label class="{{ rotulo_css }}">Nome<input name="nome" required class="{{ campo }}"></label>
+    <label class="{{ rotulo_css }}">Valor<input data-mascara="reais" name="valor" required inputmode="decimal" class="{{ campo }} w-28"></label>
+    <label class="{{ rotulo_css }}">Repete
+      <select name="intervalo_meses" class="{{ campo }}">{% for k, r in intervalos %}<option value="{{ k }}" {% if k == 1 %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+    </label>
+    <label class="{{ rotulo_css }}">Cartão
+      <select name="conta_id" required class="{{ campo }}">{% for c in cartoes %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select>
+    </label>
+    <label class="{{ rotulo_css }}">Dia<input type="number" name="dia" min="1" max="31" class="{{ campo }} w-20"></label>
+    <label class="{{ rotulo_css }}">{{ rotulo_padrao }} (opcional)<input name="padrao" class="{{ campo }}"></label>
+    <label class="{{ rotulo_css }}">Observação<input name="observacao" class="{{ campo }}"></label>
+    <button class="{{ botao }}"><i data-lucide="plus" class="size-4"></i>Criar</button>
+  </form>
+</details>
+{% endblock %}

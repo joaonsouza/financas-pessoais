@@ -1,0 +1,3 @@
+{"id": "11111111-aaaa-bbbb-cccc-000000000001", "status": "UPDATED", "executionStatus": "SUCCESS",
+ "lastUpdatedAt": "2026-10-04T12:30:00.000Z", "consentExpiresAt": "2027-04-01T00:00:00.000Z",
+ "connector": {"id": 999, "name": "Banco Ficticio"}, "error": null}

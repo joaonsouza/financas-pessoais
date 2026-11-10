@@ -1,0 +1,46 @@
+{# Reserva de oportunidade: dinheiro esperando fechar uma cota. Fora da alocação; o saldo entra no rebalanceamento. #}
+{% if carteira.oportunidade %}
+<section x-data="{ aberto: true }" class="{{ cartao_css }} mb-4 overflow-hidden" aria-labelledby="titulo-oportunidade">
+  <div class="flex flex-wrap items-center gap-3 px-5 py-4">
+    <button type="button" @click="aberto = !aberto" :aria-expanded="aberto" aria-controls="bloco-oportunidade"
+            class="flex flex-1 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-left cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+      <i data-lucide="chevron-down" class="size-4 text-ink-muted transition-transform duration-150" :class="aberto ? '' : '-rotate-90'"></i>
+      <i data-lucide="piggy-bank" class="size-5 text-primary"></i>
+      <h2 id="titulo-oportunidade" class="font-semibold">Reserva de oportunidade</h2>
+      <span class="text-sm tabular-nums text-ink-muted">{{ carteira.oportunidade|length }} {{ "ativo" if carteira.oportunidade|length == 1 else "ativos" }} · {{ carteira.oportunidade_saldo|reais }}</span>
+    </button>
+    <a href="/investimentos/rebalancear{{ '?carteira=' ~ carteira_sel.id if carteira_sel }}" class="text-sm font-medium text-primary hover:underline cursor-pointer">Usar no rebalanceamento</a>
+  </div>
+  <div id="bloco-oportunidade" x-show="aberto" class="overflow-x-auto border-t border-line">
+    <p class="px-5 py-2 text-xs text-ink-muted bg-page">Fica fora da alocação por classe; o saldo conta como disponível na hora de comprar.</p>
+    <table class="w-full text-sm min-w-[560px]">
+      <thead class="text-xs text-ink-muted">
+        <tr class="border-b border-line">
+          <th scope="col" class="text-left font-medium px-5 py-2">Ativo</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Saldo</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Custo</th>
+          <th scope="col" class="text-right font-medium px-5 py-2">Rentabilidade</th>
+          <th scope="col" class="px-3 py-2"><span class="sr-only">Ações</span></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-line">
+        {% for a in carteira.oportunidade %}
+        <tr class="hover:bg-page transition-colors duration-150">
+          <td class="px-5 py-3">
+            <a href="/investimentos/ativos/{{ a.ativo.id }}" class="font-medium text-primary hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 rounded">{{ a.ativo.codigo }}</a>
+            {% if a.ativo.nome %}<span class="block text-xs text-ink-muted truncate max-w-64">{{ a.ativo.nome }}</span>{% endif %}
+          </td>
+          <td class="px-3 py-3 text-right tabular-nums font-medium">{{ a.saldo|reais }}</td>
+          <td class="px-3 py-3 text-right tabular-nums text-ink-muted">{{ a.custo|reais }}</td>
+          <td class="px-5 py-3 text-right tabular-nums {{ 'text-income' if (a.rent_pct or 0) > 0 else ('text-expense' if (a.rent_pct or 0) < 0 else 'text-ink-muted') }}">{{ a.rent_brl|reais }}{% if a.rent_pct is not none %} <span class="text-xs">({{ a.rent_pct|pct }})</span>{% endif %}</td>
+          <td class="px-3 py-1 text-center whitespace-nowrap">
+            <button type="button" hx-get="/investimentos/operacoes/nova?ativo_id={{ a.ativo.id }}" hx-target="#modal" aria-label="Aporte ou operação em {{ a.ativo.codigo }}" title="Aporte / nova operação" class="{{ icone_btn }}"><i data-lucide="plus" class="size-4"></i></button>
+            <a href="/investimentos/ativos/{{ a.ativo.id }}" aria-label="Detalhes de {{ a.ativo.codigo }}" title="Detalhes" class="{{ icone_btn }}"><i data-lucide="more-horizontal" class="size-4"></i></a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}

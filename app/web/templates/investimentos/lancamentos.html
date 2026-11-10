@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% block titulo %}Lançamentos de investimentos{% endblock %}
+{% block cabecalho %}Lançamentos de investimentos{% endblock %}
+{% block conteudo %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set seletor = "h-10 rounded-xl border border-line bg-card px-3 text-sm text-ink cursor-pointer focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set icone_btn = "size-9 rounded-xl inline-flex items-center justify-center text-ink-muted hover:text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+
+<div class="flex flex-wrap items-center gap-3 mb-6">
+  <a href="/investimentos" class="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink min-h-11 cursor-pointer"><i data-lucide="chevron-left" class="size-4"></i>Investimentos</a>
+  <button type="button" hx-get="/investimentos/operacoes/nova" hx-target="#modal" class="{{ botao }} ml-auto"><i data-lucide="plus" class="size-4"></i>Operação</button>
+</div>
+
+{# ---------- Gráfico: Consolidação de aportes (estilo Investidor10) ---------- #}
+{% if dados_aportes %}
+<script src="/static/vendor/chart.umd.js"></script>
+<script>
+  const EVENTOS_APORTES = {{ dados_aportes|tojson }};
+  const HOJE_MES = {{ hoje_mes|tojson }};
+
+  function somarMesesYm(ym, delta) {
+    const [a, m] = ym.split("-").map(Number);
+    const total = a * 12 + (m - 1) + delta;
+    const novoAno = Math.floor(total / 12);
+    const novoMes = (total % 12) + 1;
+    return `${String(novoAno).padStart(4, "0")}-${String(novoMes).padStart(2, "0")}`;
+  }
+
+  function listarMeses(inicio, fim) {
+    const lista = [];
+    let atual = inicio;
+    while (atual <= fim) {
+      lista.push(atual);
+      atual = somarMesesYm(atual, 1);
+    }
+    return lista;
+  }
+
+  function graficoAportes() {
+    let chartInst = null;
+    const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+    const brlCompleto = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+    return {
+      agrupamento: "mensal",
+      periodo: "24",
+      tipoAtivo: "",
+
+      calcularSeries() {
+        const filtrados = this.tipoAtivo
+          ? EVENTOS_APORTES.filter((e) => e.classe === this.tipoAtivo)
+          : EVENTOS_APORTES;
+
+        const baseEventos = filtrados.length ? filtrados : EVENTOS_APORTES;
+        const mesesOrd = baseEventos.map((e) => e.mes).sort();
+        const primeiroMes = mesesOrd.length ? mesesOrd[0] : HOJE_MES;
+        const ultimoMes = mesesOrd.length && mesesOrd[mesesOrd.length - 1] > HOJE_MES ? mesesOrd[mesesOrd.length - 1] : HOJE_MES;
+
+        let inicioMes = primeiroMes;
+        if (this.periodo !== "tudo") {
+          const n = parseInt(this.periodo, 10);
+          const limite = somarMesesYm(ultimoMes, -(n - 1));
+          inicioMes = primeiroMes > limite ? primeiroMes : limite;
+        }
+
+        if (this.agrupamento === "anual") {
+          const anoIni = parseInt(inicioMes.slice(0, 4), 10);
+          const anoFim = parseInt(ultimoMes.slice(0, 4), 10);
+          const chaves = [];
+          for (let a = anoIni; a <= anoFim; a++) chaves.push(String(a));
+          const comprasMap = Object.fromEntries(chaves.map((k) => [k, 0]));
+          const vendasMap = Object.fromEntries(chaves.map((k) => [k, 0]));
+          for (const ev of filtrados) {
+            if (ev.mes < `${anoIni}-01` || ev.mes > `${anoFim}-12`) continue;
+            if (ev.direcao === "compra") comprasMap[ev.ano] = (comprasMap[ev.ano] || 0) + ev.valor;
+            else vendasMap[ev.ano] = (vendasMap[ev.ano] || 0) + ev.valor;
+          }
+          return {
+            rotulos: chaves,
+            compras: chaves.map((k) => Math.round(comprasMap[k] * 100) / 100),
+            vendas: chaves.map((k) => -Math.round(vendasMap[k] * 100) / 100),
+          };
+        }
+
+        const meses = listarMeses(inicioMes, ultimoMes);
+        const comprasMap = Object.fromEntries(meses.map((m) => [m, 0]));
+        const vendasMap = Object.fromEntries(meses.map((m) => [m, 0]));
+        for (const ev of filtrados) {
+          if (ev.mes < inicioMes || ev.mes > ultimoMes) continue;
+          if (ev.direcao === "compra") comprasMap[ev.mes] = (comprasMap[ev.mes] || 0) + ev.valor;
+          else vendasMap[ev.mes] = (vendasMap[ev.mes] || 0) + ev.valor;
+        }
+        return {
+          rotulos: meses.map((m) => `${m.slice(5, 7)}/${m.slice(0, 4)}`),
+          compras: meses.map((m) => Math.round(comprasMap[m] * 100) / 100),
+          vendas: meses.map((m) => -Math.round(vendasMap[m] * 100) / 100),
+        };
+      },
+
+      iniciar() {
+        const canvas = document.getElementById("grafico-consolidacao-aportes");
+        if (!canvas) return;
+        const estilo = getComputedStyle(document.documentElement);
+        const cor = (n) => estilo.getPropertyValue(n).trim();
+        const s = this.calcularSeries();
+
+        chartInst = new Chart(canvas, {
+          type: "bar",
+          data: {
+            labels: s.rotulos,
+            datasets: [
+              {
+                label: "Compras",
+                data: s.compras,
+                backgroundColor: "#22c55e",
+                borderRadius: 5,
+                stack: "aportes",
+                maxBarThickness: 44,
+              },
+              {
+                label: "Vendas",
+                data: s.vendas,
+                backgroundColor: "#fb7185",
+                borderRadius: 5,
+                stack: "aportes",
+                maxBarThickness: 44,
+              },
+            ],
+          },
+          options: {
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            scales: {
+              x: {
+                stacked: true,
+                grid: { display: false },
+                ticks: { color: cor("--c-ink-muted"), maxRotation: 45, minRotation: 45 },
+              },
+              y: {
+                stacked: true,
+                grid: { color: cor("--c-line") },
+                ticks: {
+                  color: cor("--c-ink-muted"),
+                  callback: (v) => brl(v),
+                },
+              },
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => {
+                    const val = Math.abs(ctx.parsed.y || 0);
+                    return `${ctx.dataset.label}: ${brlCompleto(val)}`;
+                  },
+                  footer: (itens) => {
+                    if (!itens.length) return "";
+                    const idx = itens[0].dataIndex;
+                    const comp = chartInst.data.datasets[0].data[idx] || 0;
+                    const vend = Math.abs(chartInst.data.datasets[1].data[idx] || 0);
+                    return `Aporte líquido: ${brlCompleto(comp - vend)}`;
+                  },
+                },
+              },
+            },
+          },
+        });
+      },
+
+      atualizar() {
+        if (!chartInst) return;
+        const s = this.calcularSeries();
+        chartInst.data.labels = s.rotulos;
+        chartInst.data.datasets[0].data = s.compras;
+        chartInst.data.datasets[1].data = s.vendas;
+        chartInst.update();
+      },
+    };
+  }
+</script>
+<section x-data="graficoAportes()" x-init="iniciar()" class="{{ cartao_css }} p-5 mb-5">
+  <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-line">
+    <h2 class="text-lg font-semibold">Consolidação de aportes</h2>
+    <div class="flex flex-wrap items-center gap-2">
+      <label class="inline-flex items-center gap-1.5 rounded-xl border border-line bg-card px-3 h-10 text-sm text-ink">
+        <i data-lucide="calendar" class="size-4 text-ink-muted"></i>
+        <select x-model="agrupamento" @change="atualizar()" aria-label="Agrupamento do gráfico" class="bg-transparent text-ink focus:outline-none cursor-pointer">
+          <option value="mensal">Mensal</option>
+          <option value="anual">Anual</option>
+        </select>
+      </label>
+      <label class="inline-flex items-center gap-1.5 rounded-xl border border-line bg-card px-3 h-10 text-sm text-ink">
+        <i data-lucide="calendar-range" class="size-4 text-ink-muted"></i>
+        <select x-model="periodo" @change="atualizar()" aria-label="Período do gráfico" class="bg-transparent text-ink focus:outline-none cursor-pointer">
+          <option value="12">1 Ano</option>
+          <option value="24">2 Anos</option>
+          <option value="60">5 Anos</option>
+          <option value="tudo">Tudo</option>
+        </select>
+      </label>
+      <label class="inline-flex items-center gap-1.5 rounded-xl border border-line bg-card px-3 h-10 text-sm text-ink">
+        <i data-lucide="circle-dollar-sign" class="size-4 text-ink-muted"></i>
+        <select x-model="tipoAtivo" @change="atualizar()" aria-label="Tipo de ativo no gráfico" class="bg-transparent text-ink focus:outline-none cursor-pointer">
+          <option value="">Todos os tipos</option>
+          {% for cod, rotulo in classes_ativo.items() %}
+          <option value="{{ cod }}">{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div class="flex items-center justify-center gap-5 pt-4 pb-2 text-xs text-ink-muted">
+    <span class="inline-flex items-center gap-1.5">
+      <span class="inline-block w-4 h-2.5 rounded-sm" style="background-color: #22c55e;"></span>Compras
+    </span>
+    <span class="inline-flex items-center gap-1.5">
+      <span class="inline-block w-4 h-2.5 rounded-sm" style="background-color: #fb7185;"></span>Vendas
+    </span>
+  </div>
+
+  <div class="h-72">
+    <canvas id="grafico-consolidacao-aportes"></canvas>
+  </div>
+</section>
+{% endif %}
+
+<form method="get" action="/investimentos/lancamentos" class="flex flex-wrap gap-2 mb-4">
+  {% if carteiras|length > 1 %}
+  <label class="sr-only" for="f-carteira">Carteira</label>
+  <select id="f-carteira" name="carteira" onchange="this.form.submit()" class="{{ seletor }}">
+    <option value="">Todas as carteiras</option>
+    {% for c in carteiras %}<option value="{{ c.id }}"{% if filtros.carteira == c.id|string %} selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <label class="sr-only" for="f-alocacao">Alocação</label>
+  <select id="f-alocacao" name="alocacao" onchange="this.form.submit()" class="{{ seletor }}">
+    <option value="">Todas as alocações</option>
+    {% for c, rotulo in rotulos_classe.items() %}<option value="{{ c }}"{% if filtros.alocacao == c %} selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+  </select>
+  <label class="sr-only" for="f-tipo">Tipo</label>
+  <select id="f-tipo" name="tipo" onchange="this.form.submit()" class="{{ seletor }}">
+    <option value="">Todos os tipos</option>
+    {% for valor, rotulo in (("entrada", "Compras e aplicações"), ("saida", "Vendas e resgates"), ("ajuste", "Ajustes de posição"), ("rendimento", "Rendimentos")) %}
+      <option value="{{ valor }}"{% if filtros.tipo == valor %} selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+  </select>
+  <label class="sr-only" for="f-ativo">Ativo</label>
+  <select id="f-ativo" name="ativo" onchange="this.form.submit()" class="{{ seletor }}">
+    <option value="">Todos os ativos</option>
+    {% for a in ativos %}<option value="{{ a.id }}"{% if filtros.ativo == a.id|string %} selected{% endif %}>{{ a.codigo }}{% if not a.ativo %} (encerrado){% endif %}</option>{% endfor %}
+  </select>
+  <label class="sr-only" for="f-ano">Ano</label>
+  <select id="f-ano" name="ano" onchange="this.form.submit()" class="{{ seletor }}">
+    <option value="">Todos os anos</option>
+    {% for ano in anos %}<option value="{{ ano }}"{% if filtros.ano == ano|string %} selected{% endif %}>{{ ano }}</option>{% endfor %}
+  </select>
+  <label class="sr-only" for="f-local">Onde fica</label>
+  <select id="f-local" name="local" onchange="this.form.submit()" class="{{ seletor }}">
+    <option value="">Todos os locais</option>
+    <option value="sem"{% if filtros.local == "sem" %} selected{% endif %}>Sem local</option>
+    {% for valor, rotulo in opcoes_custodia %}<option value="{{ valor }}"{% if filtros.local == valor %} selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+  </select>
+  <noscript><button class="{{ botao }}">Filtrar</button></noscript>
+</form>
+
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+  <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Lançamentos</div><div class="mt-1 text-2xl font-semibold tabular-nums">{{ linhas|length }}</div></div>
+  <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Compras e aplicações</div><div class="mt-1 text-2xl font-semibold tabular-nums">{{ entradas|reais }}</div></div>
+  <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Vendas e resgates</div><div class="mt-1 text-2xl font-semibold tabular-nums">{{ saidas|reais }}</div></div>
+</div>
+
+<section class="{{ cartao_css }} overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm min-w-[1040px]">
+      <thead class="text-xs text-ink-muted">
+        <tr class="border-b border-line">
+          <th scope="col" class="text-left font-medium px-5 py-2">Data</th>
+          <th scope="col" class="text-left font-medium px-3 py-2">Ativo</th>
+          <th scope="col" class="text-left font-medium px-3 py-2">Tipo</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Quant.</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Preço</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Total</th>
+          <th scope="col" class="text-left font-medium px-3 py-2">Onde fica</th>
+          <th scope="col" class="px-5 py-2"><span class="sr-only">Opções</span></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-line">
+        {% for l in linhas %}
+        {% set o, a = l.op, l.ativo %}
+        {% set rf = a.classe == "renda_fixa" and not a.por_titulos %}
+        {% set saida = o.tipo in ("venda", "resgate") %}
+        <tr class="hover:bg-page transition-colors duration-150">
+          <td class="px-5 py-3 tabular-nums whitespace-nowrap">{{ o.data|data_br }}</td>
+          <td class="px-3 py-3">
+            <a href="/investimentos/ativos/{{ a.id }}" class="font-medium text-primary hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 rounded">{{ a.codigo }}</a>
+            <span class="inline-flex rounded-full bg-page text-ink-muted px-2 py-0.5 text-xs font-medium">{{ etiquetas_tipo[a.classe] }}</span>
+            <span class="block text-xs text-ink-muted">{{ rotulos_classe[a.alocacao] }}{% if not a.ativo %} · encerrado{% endif %}</span>
+          </td>
+          <td class="px-3 py-3">
+            <span class="inline-flex items-center gap-1 {{ 'text-expense' if saida else ('text-income' if o.tipo in ('compra', 'aplicacao', 'rendimento') else 'text-ink-muted') }}">
+              <i data-lucide="{{ 'arrow-up-right' if saida else ('arrow-down-left' if o.tipo in ('compra', 'aplicacao') else ('sparkles' if o.tipo == 'rendimento' else 'sliders-horizontal')) }}" class="size-4"></i>{{ rotulos_tipo[o.tipo] }}
+            </span>
+            {% if o.observacao %}<span class="block text-xs text-ink-muted max-w-64 truncate" title="{{ o.observacao }}">{{ o.observacao }}</span>{% endif %}
+          </td>
+          <td class="px-3 py-3 text-right tabular-nums">{% if rf %}—{% else %}{{ o.quantidade|qtd }}{% endif %}</td>
+          <td class="px-3 py-3 text-right tabular-nums">{% if rf or o.tipo == "rendimento" %}—{% else %}{{ ("US$ " ~ (o.preco_unitario|reais)[3:]) if o.cambio else o.preco_unitario|reais }}{% if o.cambio %}<span class="block text-xs text-ink-muted">câmbio {{ o.cambio|qtd }}</span>{% endif %}{% endif %}</td>
+          <td class="px-3 py-3 text-right tabular-nums font-medium">{% if o.tipo == "rendimento" %}<span class="text-ink-muted font-normal">sem custo</span>{% else %}{{ l.total|reais }}{% endif %}{% if o.taxas %}<span class="block text-xs text-ink-muted font-normal">taxas {{ o.taxas|reais }}</span>{% endif %}{% if o.valor_liquido is not none %}<span class="block text-xs text-ink-muted font-normal" title="Valor que caiu na conta, com o imposto já retido">líquido {{ o.valor_liquido|reais }}</span>{% endif %}</td>
+          <td class="px-3 py-2">
+            <select name="custodia" aria-label="Onde fica a operação de {{ a.codigo }} em {{ o.data|data_br }}"
+                    hx-post="/investimentos/operacoes/{{ o.id }}/custodia" hx-trigger="change" hx-swap="none"
+                    hx-on::after-request="if (event.detail.successful) { this.classList.toggle('border-warning', !this.value); this.classList.toggle('text-warning', !this.value); }"
+                    class="h-9 max-w-56 rounded-lg border bg-card px-2 text-sm cursor-pointer focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150 {{ 'border-warning text-warning' if not l.custodia else 'border-line text-ink' }}">
+              <option value="">Sem local</option>
+              {% for valor, rotulo in opcoes_custodia %}<option value="{{ valor }}"{% if l.custodia == valor %} selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+            </select>
+          </td>
+          <td class="px-5 py-1 text-right whitespace-nowrap">
+            <button type="button" hx-get="/investimentos/operacoes/{{ o.id }}/editar" hx-target="#modal" aria-label="Editar operação de {{ a.codigo }} em {{ o.data|data_br }}" class="{{ icone_btn }}"><i data-lucide="pencil" class="size-4"></i></button>
+            <button type="button" hx-post="/investimentos/operacoes/{{ o.id }}/excluir" hx-confirm="Excluir esta operação?" aria-label="Excluir operação de {{ a.codigo }} em {{ o.data|data_br }}" class="{{ icone_btn }} hover:text-expense"><i data-lucide="trash-2" class="size-4"></i></button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="px-5 py-6 text-center text-ink-muted">Nenhum lançamento{% if filtros.alocacao or filtros.tipo or filtros.ativo or filtros.ano or filtros.local or filtros.carteira %} com esses filtros{% endif %}.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

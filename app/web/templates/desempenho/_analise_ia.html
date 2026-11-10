@@ -1,0 +1,111 @@
+<div id="bloco-analise-ia" class="p-4 rounded-xl bg-page/70 border border-line">
+  {% if erro_ia %}
+    <div class="p-3 rounded-lg bg-expense/10 text-expense text-xs mb-3 flex items-start gap-2">
+      <i data-lucide="alert-circle" class="size-4 shrink-0 mt-0.5"></i>
+      <div>
+        <span>{{ erro_ia }}</span>
+        <a href="/configuracoes?aba=ia" class="underline font-semibold ml-1">Abrir configurações de IA</a>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if analise_ia %}
+    <div class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="size-6 rounded-lg bg-primary-soft text-primary flex items-center justify-center">
+            <i data-lucide="sparkles" class="size-3.5"></i>
+          </span>
+          <span class="text-xs font-semibold text-ink">Diagnóstico da Inteligência Artificial</span>
+          {% if analise_ia.desatualizado %}
+            <span class="text-[10px] bg-warning/10 text-warning px-2 py-0.5 rounded font-medium border border-warning/20">
+              dados alterados
+            </span>
+          {% endif %}
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] text-ink-muted">Gerado em {{ analise_ia.gerado_em }}</span>
+          <button type="button"
+                  hx-post="/desempenho/analise?mes={{ mes }}"
+                  hx-vals='{"forcar": "1"}'
+                  hx-target="#bloco-analise-ia"
+                  hx-swap="outerHTML"
+                  class="text-xs text-primary hover:underline flex items-center gap-1 cursor-pointer">
+            <i data-lucide="refresh-cw" class="size-3"></i> Atualizar
+          </button>
+        </div>
+      </div>
+
+      <div class="text-sm text-ink leading-relaxed bg-card p-3 rounded-xl border border-line">
+        {{ analise_ia.resumo }}
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        {% if analise_ia.pontos_fortes %}
+          <div class="p-3 rounded-xl bg-card border border-line space-y-1.5">
+            <div class="font-semibold text-income flex items-center gap-1">
+              <i data-lucide="check" class="size-3.5"></i> Pontos Fortes
+            </div>
+            <ul class="space-y-1 text-ink-muted">
+              {% for p in analise_ia.pontos_fortes %}
+                <li class="flex items-start gap-1.5"><span>•</span><span>{{ p }}</span></li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        {% if analise_ia.pontos_de_atencao %}
+          <div class="p-3 rounded-xl bg-card border border-line space-y-1.5">
+            <div class="font-semibold text-warning flex items-center gap-1">
+              <i data-lucide="alert-triangle" class="size-3.5"></i> Pontos de Atenção
+            </div>
+            <ul class="space-y-1 text-ink-muted">
+              {% for p in analise_ia.pontos_de_atencao %}
+                <li class="flex items-start gap-1.5"><span>•</span><span>{{ p }}</span></li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      </div>
+
+      {% if analise_ia.sugestoes %}
+        <div class="p-3 rounded-xl bg-card border border-line space-y-2">
+          <div class="text-xs font-semibold text-primary flex items-center gap-1">
+            <i data-lucide="lightbulb" class="size-3.5"></i> Ações Recomendadas
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {% for s in analise_ia.sugestoes %}
+              <div class="p-2.5 rounded-lg bg-page border border-line flex flex-col justify-between">
+                <span class="text-xs text-ink font-medium">{{ s.acao }}</span>
+                {% if s.impacto_mensal_estimado %}
+                  <span class="text-[11px] text-income font-medium mt-2 tabular-nums">
+                    Impacto: ~{{ s.impacto_mensal_estimado|reais }}/mês
+                  </span>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+      <div class="space-y-0.5">
+        <div class="text-xs font-semibold text-ink flex items-center justify-center sm:justify-start gap-1.5">
+          <i data-lucide="sparkles" class="size-4 text-primary"></i>
+          Diagnóstico com Inteligência Artificial
+        </div>
+        <div class="text-xs text-ink-muted">
+          Gere uma análise estratégica dos números do mês com recomendações práticas da IA.
+        </div>
+      </div>
+      <button type="button"
+              hx-post="/desempenho/analise?mes={{ mes }}"
+              hx-target="#bloco-analise-ia"
+              hx-swap="outerHTML"
+              class="h-9 px-4 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary-strong transition-colors flex items-center gap-1.5 cursor-pointer shrink-0">
+        <i data-lucide="sparkles" class="size-3.5"></i> Pedir análise à IA
+      </button>
+    </div>
+  {% endif %}
+</div>

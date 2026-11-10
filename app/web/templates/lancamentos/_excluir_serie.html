@@ -1,0 +1,39 @@
+{# Exclusão de lançamento recorrente ou parcelado: pergunta o alcance #}
+{% set parcela = serie == "parcela" %}
+{% set opcoes = [
+  ("este", "Só esta parcela" if parcela else "Só este", "Os outros continuam como estão."),
+  ("proximos", "Esta e as próximas" if parcela else "Este e os próximos", "As anteriores ficam; as que sobrarem são renumeradas." if parcela else "Os anteriores ficam e a recorrência termina no mês anterior."),
+  ("todos", "Todas as parcelas" if parcela else "Todos", "Apaga a compra inteira, inclusive as parcelas já pagas." if parcela else "Apaga a série inteira, inclusive os já pagos, e a recorrência."),
+] if serie else [("este", "Só este", "")] %}
+<div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4 overflow-y-auto">
+  <form hx-post="/lancamentos/{{ l.id }}/excluir" hx-swap="none" x-data="{ escopo: 'este' }"
+        @keydown.escape.window="fecharModal()"
+        class="bg-card text-ink rounded-3xl shadow-xl w-full max-w-md p-6 space-y-4 max-h-full overflow-y-auto"
+        role="dialog" aria-modal="true" aria-labelledby="titulo-excluir-serie">
+    <div class="flex items-center justify-between">
+      <h2 id="titulo-excluir-serie" class="text-lg font-semibold text-expense">Excluir {{ "parcela" if parcela else "lançamento" }}</h2>
+      <button type="button" aria-label="Fechar" onclick="fecharModal()"
+              class="size-11 -mr-2 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+        <i data-lucide="x" class="size-5"></i>
+      </button>
+    </div>
+    <p class="text-sm text-ink-muted">
+      <span class="font-medium text-ink">{{ l.descricao }}</span>
+      {% if parcela %}(parcela {{ l.parcela_num }}/{{ l.parcela_total }}){% elif l.competencia_recorrencia %}({{ l.data|data_br }}){% endif %}
+      · {{ l.valor|reais }}
+    </p>
+    <fieldset class="space-y-2">
+      <legend class="sr-only">O que excluir</legend>
+      {% for valor, rotulo, ajuda in opcoes %}
+        <label class="flex items-start gap-3 rounded-xl border border-line p-3 cursor-pointer hover:border-primary transition-colors duration-150 has-[:checked]:border-expense has-[:checked]:bg-expense/5">
+          <input type="radio" name="escopo" value="{{ valor }}" x-model="escopo" {{ "checked" if loop.first }} class="mt-0.5 size-5 accent-[var(--c-expense)] cursor-pointer">
+          <span><span class="block font-medium">{{ rotulo }}</span>{% if ajuda %}<span class="block text-xs text-ink-muted">{{ ajuda }}</span>{% endif %}</span>
+        </label>
+      {% endfor %}
+    </fieldset>
+    <div class="flex justify-end gap-2 pt-2">
+      <button type="button" onclick="fecharModal()" class="px-4 h-11 rounded-xl text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Cancelar</button>
+      <button class="inline-flex items-center gap-2 px-4 h-11 rounded-xl bg-expense text-white font-medium hover:opacity-90 transition-opacity duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="trash-2" class="size-4"></i>Excluir</button>
+    </div>
+  </form>
+</div>

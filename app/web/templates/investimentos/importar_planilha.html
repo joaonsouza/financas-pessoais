@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block titulo %}Importar da planilha{% endblock %}
+{% block cabecalho %}Importar da planilha{% endblock %}
+{% block conteudo %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set campo = "w-full h-11 rounded-xl border border-line bg-card px-3 text-ink tabular-nums focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set rotulo = "flex flex-col gap-1 text-xs font-medium text-ink-muted" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+
+<a href="/investimentos" class="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink mb-4 min-h-11 cursor-pointer"><i data-lucide="chevron-left" class="size-4"></i>Investimentos</a>
+
+{% if aviso %}
+  <div role="alert" class="mb-6 rounded-xl bg-warning/10 border border-warning/30 text-warning px-4 py-3 flex items-start gap-2"><i data-lucide="alert-triangle" class="size-5 shrink-0 mt-0.5"></i><span>{{ aviso }}</span></div>
+{% endif %}
+{% if erro %}
+  <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+
+{% if linhas %}
+<form method="post" action="/investimentos/importar-planilha" class="space-y-4">
+  <p class="text-sm text-ink-muted">Posições lidas da aba INVESTIMENTOS. Informe o preço médio de cada uma (e a data do ajuste). Cada posição vira um ativo com um "ajuste de posição" na data escolhida; a meta é o percentual dentro da classe.</p>
+
+  <div class="{{ cartao_css }} p-5 flex flex-wrap gap-4 items-end">
+    <label class="{{ rotulo }}">Data do ajuste
+      <input type="date" name="data" value="{{ data }}" required class="{{ campo }} !w-auto">
+    </label>
+    {% if linhas|selectattr("classe", "equalto", "exterior")|list %}
+    <label class="{{ rotulo }}">Câmbio do exterior (R$ por US$)
+      <input name="cambio" value="{{ cambio }}" inputmode="decimal" placeholder="5,00" class="{{ campo }} !w-40">
+    </label>
+    {% endif %}
+  </div>
+
+  {% for linha in linhas %}
+    {% if loop.first or linhas[loop.index0 - 1].classe != linha.classe %}
+      <h2 class="font-semibold pt-2">{{ rotulos_classe[linha.classe] }}</h2>
+    {% endif %}
+    <div class="{{ cartao_css }} p-4 grid grid-cols-2 sm:grid-cols-6 gap-3 items-end">
+      <label class="col-span-2 flex items-center gap-3 min-h-11 cursor-pointer">
+        <input type="checkbox" name="incluir_{{ linha.i }}" {% if linha.incluir %}checked{% endif %} class="size-5 rounded accent-[var(--c-primary)] cursor-pointer">
+        <span class="min-w-0"><span class="font-medium block truncate">{{ linha.codigo }}</span>{% if linha.existe %}<span class="text-xs text-warning">já cadastrado</span>{% endif %}</span>
+      </label>
+      {% if linha.classe == "renda_fixa" %}
+        <label class="{{ rotulo }}">Valor atual (R$)
+          <input data-mascara="reais" name="preco_{{ linha.i }}" value="{{ linha.preco or linha.quantidade }}" inputmode="decimal" class="{{ campo }}">
+        </label>
+        <input type="hidden" name="quantidade_{{ linha.i }}" value="{{ linha.quantidade }}">
+      {% else %}
+        <label class="{{ rotulo }}">Quantidade
+          <input name="quantidade_{{ linha.i }}" value="{{ linha.quantidade }}" inputmode="decimal" class="{{ campo }}">
+        </label>
+        <label class="{{ rotulo }}">Preço médio ({{ "US$" if linha.classe == "exterior" else "R$" }})
+          <input data-mascara="reais" name="preco_{{ linha.i }}" value="{{ linha.preco }}" inputmode="decimal" placeholder="0,00" class="{{ campo }}">
+        </label>
+      {% endif %}
+      <label class="{{ rotulo }}">Meta na classe (%)
+        <input name="meta_{{ linha.i }}" value="{{ linha.meta }}" inputmode="decimal" class="{{ campo }}">
+      </label>
+      {% if linha.classe == "renda_fixa" %}
+        <div class="col-span-2 sm:col-span-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label class="{{ rotulo }}">Indexador
+            <select name="indexador_{{ linha.i }}" class="{{ campo }}">
+              {% for k, r in rotulos_indexador.items() %}<option value="{{ k }}" {% if linha.indexador == k %}selected{% endif %}>{{ r }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="{{ rotulo }}">Taxa
+            <input name="taxa_{{ linha.i }}" value="{{ linha.taxa }}" inputmode="decimal" placeholder="100" class="{{ campo }}">
+          </label>
+          <label class="{{ rotulo }}">Vencimento
+            <input type="date" name="vencimento_{{ linha.i }}" value="{{ linha.vencimento }}" class="{{ campo }}">
+          </label>
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Importar posições marcadas</button>
+</form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,53 @@
+<section id="insights" class="bg-card rounded-[20px] border border-line p-5 shadow-[0_4px_6px_rgba(0,0,0,0.04)]" aria-labelledby="titulo-insights">
+  <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center gap-2">
+      <span class="size-8 rounded-xl bg-primary-soft text-primary flex items-center justify-center">
+        <i data-lucide="zap" class="size-5"></i>
+      </span>
+      <div>
+        <h2 id="titulo-insights" class="font-semibold text-ink">Insights & Detecção de Anomalias</h2>
+        <p class="text-xs text-ink-muted">Padrões automáticos e oportunidades encontradas nos seus dados</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="space-y-4">
+    {% if insights %}
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {% for ins in insights[:6] %}
+          {% set cores = {
+            "positivo": "border-income/30 bg-income/5 text-income",
+            "negativo": "border-expense/30 bg-expense/5 text-expense",
+            "neutro": "border-line bg-page text-ink-muted"
+          } %}
+          {% set icones = {
+            "positivo": "trending-up",
+            "negativo": "alert-circle",
+            "neutro": "info"
+          } %}
+          <a href="{{ ins.acao_url }}" class="p-3.5 rounded-xl border {{ cores[ins.tipo] }} flex flex-col justify-between hover:border-primary/40 transition-colors group">
+            <div class="space-y-1">
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-semibold text-xs text-ink flex items-center gap-1.5">
+                  <i data-lucide="{{ icones[ins.tipo] }}" class="size-4 shrink-0"></i>
+                  {{ ins.titulo }}
+                </span>
+                <i data-lucide="arrow-right" class="size-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-primary"></i>
+              </div>
+              <p class="text-xs text-ink-muted leading-relaxed">
+                {{ ins.texto }}
+              </p>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="py-4 text-center text-xs text-ink-muted">
+        Sem anomalias ou desvios expressivos detectados no período.
+      </div>
+    {% endif %}
+
+    {# Bloco da IA #}
+    {% include "desempenho/_analise_ia.html" %}
+  </div>
+</section>

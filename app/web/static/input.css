@@ -1,0 +1,77 @@
+@import "tailwindcss";
+@source "../templates";
+
+:root {
+  --c-page: #F5F5F7;
+  --c-card: #FFFFFF;
+  --c-ink: #0F172A;
+  --c-ink-muted: #64748B;
+  --c-line: #E2E8F0;
+  --c-primary: #1E40AF;
+  --c-primary-strong: #1E3A8A;
+  --c-primary-soft: #DBEAFE;
+  --c-income: #059669;
+  --c-expense: #DC2626;
+  --c-warning: #B45309;
+  --c-card-accent: #0D9488;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-page: #0B1120;
+    --c-card: #151E32;
+    --c-ink: #F1F5F9;
+    --c-ink-muted: #94A3B8;
+    --c-line: rgba(255, 255, 255, 0.08);
+    --c-primary: #3B82F6;
+    --c-primary-strong: #2563EB;
+    --c-primary-soft: rgba(59, 130, 246, 0.15);
+    --c-income: #34D399;
+    --c-expense: #F87171;
+    --c-warning: #FBBF24;
+    --c-card-accent: #2DD4BF;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-page: var(--c-page);
+  --color-card: var(--c-card);
+  --color-ink: var(--c-ink);
+  --color-ink-muted: var(--c-ink-muted);
+  --color-line: var(--c-line);
+  --color-primary: var(--c-primary);
+  --color-primary-strong: var(--c-primary-strong);
+  --color-primary-soft: var(--c-primary-soft);
+  --color-income: var(--c-income);
+  --color-expense: var(--c-expense);
+  --color-warning: var(--c-warning);
+  --color-card-accent: var(--c-card-accent);
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+html { font-family: var(--font-sans); }
+body { background: var(--c-page); color: var(--c-ink); line-height: 1.5; }
+
+[x-cloak] { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Telas largas: o bloco central fica em 80rem (max-w-7xl) e é recentrado na janela (o conteúdo
+   começa depois do menu de 15rem, então o centro dele fica 7,5rem à direita do centro da janela).
+   Margem em vez de transform para não quebrar elementos fixed dentro do bloco.
+   O painel lateral e as ações do topo vão para a borda direita, usando a folga que sobra. */
+@media (min-width: 64rem) {
+  :root {
+    --folga: max(0px, calc((100vw - 15rem - 80rem) / 2));
+    --recuo: max(0px, calc(var(--folga) - 7.5rem));
+  }
+  .bloco-central { margin-left: var(--recuo); margin-right: 0; }
+  .painel-lateral { transform: translateX(max(0px, calc(2 * var(--folga) - var(--recuo) - 4rem))); }
+}

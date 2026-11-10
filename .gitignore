@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.db
+*.db-journal
+tools/
+# banco real (data/financas.db) nunca entra no git
+/data/
+
+# extratos e faturas reais nunca entram no git (amostras ficam no Drive)
+/*.pdf
+/*.ofx
+/*.csv
+/*.xlsx

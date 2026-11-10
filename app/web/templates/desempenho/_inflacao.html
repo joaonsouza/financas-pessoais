@@ -1,0 +1,68 @@
+{% set cartao_css = "bg-card rounded-[20px] border border-line p-5 shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set link_categorias %}<a href="/configuracoes?aba=categorias" class="text-primary font-medium hover:underline">Configurações › Categorias</a>{% endset %}
+<section id="inflacao" class="{{ cartao_css }} scroll-mt-6" aria-labelledby="titulo-inflacao">
+  <div class="mb-4">
+    <h2 id="titulo-inflacao" class="font-semibold text-ink">Minha inflação</h2>
+    <p class="text-xs text-ink-muted">Quanto subiram suas contas fixas, comparado ao IPCA{% if inflacao.meses %} · {{ inflacao.rotulo }}{% endif %}</p>
+  </div>
+  {% if not inflacao.meses %}
+    <p class="text-sm text-ink-muted">Esta seção se preenche sozinha com os pagamentos das categorias de contas fixas (aluguel, condomínio, internet, energia...), a partir do 2º mês de cada conta. As categorias que entram ficam em {{ link_categorias }}.</p>
+  {% else %}
+    {% set dif = (inflacao.acumulado_pessoal - inflacao.acumulado_ipca) * 100 if inflacao.acumulado_ipca is not none else none %}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+      <div>
+        <div class="text-sm text-ink-muted">Minha inflação</div>
+        <div class="text-2xl font-semibold tabular-nums">{{ (inflacao.acumulado_pessoal * 100)|pct }}</div>
+      </div>
+      <div>
+        <div class="text-sm text-ink-muted">IPCA{% if inflacao.ipca_ate and inflacao.ipca_ate != inflacao.meses[-1].competencia %} (até {{ inflacao.ipca_ate|nome_mes }}){% endif %}</div>
+        <div class="text-2xl font-semibold tabular-nums">{{ (inflacao.acumulado_ipca * 100)|pct if inflacao.acumulado_ipca is not none else "—" }}</div>
+      </div>
+      <div>
+        <div class="text-sm text-ink-muted">Diferença</div>
+        <div class="text-2xl font-semibold tabular-nums {{ 'text-expense' if dif is not none and dif > 0 else 'text-income' if dif is not none and dif < 0 else '' }}">
+          {% if dif is none %}—{% else %}{{ "+" if dif > 0 }}{{ (dif|pct)[:-1] }} p.p.{% endif %}
+        </div>
+      </div>
+    </div>
+    {% if inflacao.meses_sem_dados %}
+      <p class="text-xs text-ink-muted mb-2">{{ inflacao.meses_sem_dados }} {{ "mês" if inflacao.meses_sem_dados == 1 else "meses" }} com menos de 2 contas para comparar {{ "conta" if inflacao.meses_sem_dados == 1 else "contam" }} como 0% no acumulado.</p>
+    {% endif %}
+    <div class="relative h-64">
+      <canvas id="grafico-inflacao" role="img" aria-label="Minha inflação e IPCA, mês a mês"></canvas>
+    </div>
+    <details class="mt-4">
+      <summary class="cursor-pointer font-medium text-sm flex items-center gap-2 min-h-11 rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+        <i data-lucide="list" class="size-4"></i>Ver itens ({{ inflacao.itens|length }})
+      </summary>
+      <p class="text-xs text-ink-muted mt-2">Entram as despesas das categorias marcadas como preço fixo ou consumo em {{ link_categorias }}.</p>
+      <div class="overflow-x-auto mt-2">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-ink-muted">
+              <th class="py-2 pr-3 font-medium">Item</th>
+              <th class="py-2 pr-3 font-medium text-right">Preço atual</th>
+              <th class="py-2 pr-3 font-medium text-right">Variação no período</th>
+              <th class="py-2 pr-3 font-medium">Último reajuste</th>
+              <th class="py-2 font-medium text-right">Peso</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-line">
+            {% for it in inflacao.itens %}
+            <tr>
+              <td class="py-2 pr-3">
+                {{ it.nome }}
+                {% if it.tipo == "consumo" %}<span class="block text-xs text-ink-muted">consumo · média de {{ it.meses_media }} {{ "mês" if it.meses_media == 1 else "meses" }}</span>{% endif %}
+              </td>
+              <td class="py-2 pr-3 text-right tabular-nums">{{ it.preco|reais_dec }}</td>
+              <td class="py-2 pr-3 text-right tabular-nums {{ 'text-expense' if it.variacao and it.variacao > 0 else 'text-income' if it.variacao and it.variacao < 0 else '' }}">{{ (it.variacao * 100)|pct if it.variacao is not none else "—" }}</td>
+              <td class="py-2 pr-3 tabular-nums">{% if it.ultimo_reajuste %}{{ it.ultimo_reajuste[0]|nome_mes }} · {{ (it.ultimo_reajuste[1] * 100)|pct }}{% else %}—{% endif %}</td>
+              <td class="py-2 text-right tabular-nums">{{ (it.peso * 100)|pct(0) if it.peso is not none else "—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  {% endif %}
+</section>

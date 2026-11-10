@@ -1,0 +1,10 @@
+{% import "_macros.html" as m %}
+{# tela larga (sobra margem à direita do bloco central): fora do bloco, sem apertar a lista; senão, faixa acima dela #}
+<aside class="grid grid-cols-1 sm:max-[2047px]:grid-cols-2 gap-4 mb-6 min-[2048px]:absolute min-[2048px]:top-0 min-[2048px]:left-full min-[2048px]:ml-8 min-[2048px]:w-80 min-[2048px]:mb-0" aria-label="Gastos fixos">
+  {% set n, valor = atalhos.recorrencias %}
+  {{ m.card_atalho("/lancamentos/recorrencias", "repeat", "Recorrências", (valor|reais) ~ "/mês",
+                   n ~ (" ativa" if n == 1 else " ativas") ~ " · contas que se repetem") }}
+  {% set n, valor = atalhos.assinaturas %}
+  {{ m.card_atalho("/lancamentos/assinaturas", "badge-check", "Assinaturas", (valor|reais) ~ "/mês",
+                   n ~ (" ativa" if n == 1 else " ativas") ~ " · cobradas no cartão") }}
+</aside>

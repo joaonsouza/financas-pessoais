@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block titulo %}Sincronizar Open Finance{% endblock %}
+{% block cabecalho %}Sincronizar Open Finance{% endblock %}
+{% block conteudo %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set botao_sec = "inline-flex items-center gap-2 bg-primary-soft text-primary rounded-xl px-4 h-11 font-medium hover:bg-primary-soft/70 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set rotulo_css = "flex flex-col gap-1 text-sm font-medium text-ink-muted" %}
+
+{% if erro %}
+  <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+
+{% for st in grupo.status if st.erro or st.alertas %}
+  <div role="alert" class="mb-4 rounded-xl bg-warning/10 border border-warning/30 text-warning px-4 py-3 flex items-start gap-2">
+    <i data-lucide="alert-triangle" class="size-5 shrink-0 mt-0.5"></i>
+    <span><strong>{{ st.nome or "Item" }}</strong>: {{ st.erro or (st.alertas|join(" ")) }}</span>
+  </div>
+{% endfor %}
+
+<div class="flex flex-wrap items-center gap-3 mb-6">
+  <a href="/importar" class="inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="arrow-left" class="size-4"></i>Voltar</a>
+  {% if pode_todas %}
+    <form method="post" action="/importar/sincronizacao/{{ token }}/confirmar-todas" class="ml-auto">
+      <button class="{{ botao }}"><i data-lucide="check-check" class="size-4"></i>Confirmar todas</button>
+    </form>
+  {% endif %}
+</div>
+
+<div class="space-y-4">
+  {% for pc in grupo.pcs %}
+    {% set i = loop.index0 %}
+    <section class="{{ cartao_css }} p-5" aria-labelledby="conta-{{ i }}">
+      <div class="flex flex-wrap items-start gap-x-6 gap-y-3">
+        <div class="min-w-0 flex-1">
+          <h2 id="conta-{{ i }}" class="font-semibold flex items-center gap-2"><i data-lucide="{{ 'credit-card' if pc.tipo == 'cartao' else 'landmark' }}" class="size-5 text-primary"></i><span class="truncate">{{ pc.nome_pluggy }}</span></h2>
+          <div class="text-sm text-ink-muted mt-1">{{ "Cartão" if pc.tipo == "cartao" else "Conta corrente" }}{% if pc.resultado %} · {{ pc.desde|data_br }} a {{ pc.ate|data_br }}{% endif %}{% if pc.conta %} · {{ pc.conta.nome }}{% endif %}</div>
+        </div>
+        {% if i in grupo.feitas %}
+          {% set f = grupo.feitas[i] %}
+          <div role="status" class="text-sm text-income flex items-center gap-1.5"><i data-lucide="check-circle" class="size-4"></i>Importada: {{ f[0] }} nova{{ "s" if f[0] != 1 }}, {{ f[1] }} conciliada{{ "s" if f[1] != 1 }}, {{ f[2] }} duplicada{{ "s" if f[2] != 1 }} ignorada{{ "s" if f[2] != 1 }}.</div>
+        {% elif pc.erro %}
+          <div role="alert" class="text-sm text-expense flex items-center gap-1.5"><i data-lucide="alert-circle" class="size-4"></i>{{ pc.erro }}</div>
+        {% elif pc.proposta %}
+          {% set linhas = pc.proposta.linhas %}
+          <div class="text-sm text-ink-muted tabular-nums">{{ linhas|length }} transações · {{ linhas|selectattr("status", "equalto", "duplicada")|list|length }} já importadas</div>
+          {% if ativos.get(i) %}
+            <div class="flex flex-wrap items-center gap-2">
+              <a href="/importar/{{ grupo.tokens[i] }}" class="{{ botao_sec }}"><i data-lucide="list-checks" class="size-4"></i>Revisar</a>
+              <form method="post" action="/importar/sincronizacao/{{ token }}/{{ i }}/confirmar">
+                <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Confirmar</button>
+              </form>
+            </div>
+          {% else %}
+            <span class="text-sm text-ink-muted">Concluída ou expirada.</span>
+          {% endif %}
+        {% else %}
+          <form method="post" action="/importar/sincronizacao/{{ token }}/{{ i }}/vincular" class="flex flex-wrap items-end gap-3">
+            <label class="{{ rotulo_css }}">Qual {{ "cartão" if pc.tipo == "cartao" else "conta" }} do app é esta?
+              <select name="conta_id" required class="{{ campo }} min-w-56">
+                <option value="">Escolha…</option>
+                {% for c in pc.candidatas %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+              </select>
+            </label>
+            <button class="{{ botao }}"><i data-lucide="link" class="size-4"></i>Vincular</button>
+          </form>
+        {% endif %}
+      </div>
+      {% if i in grupo.avisos %}
+        <p role="alert" class="mt-3 text-sm text-warning flex items-center gap-1.5"><i data-lucide="alert-triangle" class="size-4"></i>{{ grupo.avisos[i] }}</p>
+      {% endif %}
+      {% if pc.proposta and pc.proposta.avisos and i not in grupo.feitas %}
+        <ul class="mt-3 text-sm text-warning space-y-1">{% for a in pc.proposta.avisos %}<li>{{ a }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if not pc.proposta and not pc.erro and not pc.candidatas %}
+        <p class="mt-3 text-sm text-ink-muted">Cadastre {{ "um cartão" if pc.tipo == "cartao" else "uma conta" }} no app para poder vinculá-{{ "lo" if pc.tipo == "cartao" else "la" }}.</p>
+      {% elif not pc.proposta and not pc.erro %}
+        <p class="mt-3 text-sm text-ink-muted">Na primeira vez, o app guarda o vínculo e passa a reconhecer esta conta sozinho.</p>
+      {% endif %}
+    </section>
+  {% else %}
+    <p class="{{ cartao_css }} p-5 text-ink-muted">Nenhuma conta encontrada nos itens configurados.</p>
+  {% endfor %}
+</div>
+{% endblock %}

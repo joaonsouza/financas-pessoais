@@ -1,0 +1,6 @@
+{"page": 1, "total": 2, "totalPages": 1, "results": [
+ {"id": "acc-corrente-0001", "type": "BANK", "subtype": "CHECKING_ACCOUNT", "name": "Conta Corrente Ficticia",
+  "number": "0001/12345-6", "balance": 154320.55, "currencyCode": "BRL", "bankData": {"transferNumber": "0001/12345-6"}, "creditData": null},
+ {"id": "acc-cartao-0001", "type": "CREDIT", "subtype": "CREDIT_CARD", "name": "Cartao Ficticio Gold",
+  "number": "1234", "balance": 1200.0, "currencyCode": "BRL", "creditData": {"brand": "VISA", "creditLimit": 5000, "availableCreditLimit": 3800}}
+]}

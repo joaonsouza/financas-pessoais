@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block titulo %}Parcelas{% endblock %}
+{% block cabecalho %}Parcelas{% endblock %}
+{% block conteudo %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+
+{% if erro %}
+  <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+
+<section class="{{ cartao_css }} p-5 mb-6 flex flex-wrap items-end gap-x-8 gap-y-4" aria-label="Teto e filtro">
+  <form method="post" action="/cartoes/parcelas/teto" class="flex flex-wrap items-end gap-3">
+    <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Teto mensal de parcelas (R$)
+      <input data-mascara="reais" name="teto" inputmode="decimal" required value="{{ visao.teto|reais_input }}" class="{{ campo }} w-44 tabular-nums">
+    </label>
+    <button class="{{ botao }}"><i data-lucide="save" class="size-4"></i>Salvar</button>
+  </form>
+  <form method="get" action="/cartoes/parcelas" class="flex flex-wrap items-end gap-3">
+    <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Cartão
+      <select name="cartao" onchange="this.form.submit()" class="{{ campo }} min-w-56">
+        <option value="">Todos os cartões</option>
+        {% for c in cartoes %}<option value="{{ c.id }}" {{ "selected" if c.id == cartao_id }}>{{ c.nome }}</option>{% endfor %}
+      </select>
+    </label>
+  </form>
+  {% if visao.teto == 0 %}<p class="text-sm text-ink-muted">Teto 0 = sem teto: nenhum alerta.</p>{% endif %}
+</section>
+
+{% if not visao.compras %}
+  <section class="{{ cartao_css }} p-5 mb-6"><p class="text-ink-muted">Nenhuma parcela a vencer.</p></section>
+{% endif %}
+  <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" aria-label="Resumo">
+    <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Falta pagar em parcelas</div><div class="text-2xl font-semibold tabular-nums mt-1">{{ visao.total_a_pagar|reais }}</div></div>
+    <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Compras parceladas ativas</div><div class="text-2xl font-semibold tabular-nums mt-1">{{ visao.qtd_compras }}</div></div>
+    <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Mês de maior peso</div><div class="text-2xl font-semibold tabular-nums mt-1">{{ visao.pico.total|reais if visao.pico else "—" }}</div><div class="text-sm text-ink-muted">{{ visao.pico.competencia|nome_mes if visao.pico else "—" }}</div></div>
+    <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Meses acima do teto</div><div class="text-2xl font-semibold tabular-nums mt-1 {{ 'text-expense' if visao.meses_acima }}">{{ visao.meses_acima }}</div></div>
+  </section>
+
+{% if visao.meses %}
+  <section class="{{ cartao_css }} p-5 mb-6" aria-labelledby="titulo-curva">
+    <h2 id="titulo-curva" class="font-semibold mb-3">Parcelas por fatura</h2>
+    <p class="text-sm text-ink-muted mb-3">Cada barra é a fatura do mês: parcelas já lançadas e pendentes. Meses passados em cinza.</p>
+    <div class="h-72"><canvas id="grafico-parcelas" role="img" aria-label="Parcelas por fatura contra o teto"></canvas></div>
+    <ul class="sr-only">{% for m in visao.meses %}<li>Fatura de {{ m.competencia|nome_mes }}: {{ m.total|reais }}{{ ", acima do teto" if m.acima }}</li>{% endfor %}</ul>
+  </section>
+
+  <section class="{{ cartao_css }} overflow-hidden mb-6" aria-labelledby="titulo-compras"
+           x-data="{ busca: '', ordem: 'falta', compras: {{ compras|tojson|forceescape }},
+                     brl(v) { return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+                     get lista() {
+                       const b = this.busca.trim().toLowerCase(), o = this.ordem;
+                       return this.compras.filter(c => c.descricao.toLowerCase().includes(b))
+                         .sort((x, y) => o === 'fim' ? x.fim.localeCompare(y.fim) : y[o] - x[o]);
+                     } }">
+    <div class="p-5 pb-3 flex flex-wrap items-end justify-between gap-3">
+      <h2 id="titulo-compras" class="font-semibold">Compras parceladas</h2>
+      <div class="flex flex-wrap items-end gap-3">
+        <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Buscar
+          <input type="search" x-model="busca" placeholder="Descrição" class="{{ campo }} w-48">
+        </label>
+        <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Ordenar por
+          <select x-model="ordem" class="{{ campo }}">
+            <option value="falta">Quanto falta</option>
+            <option value="parcela">Valor da parcela</option>
+            <option value="fim">Mês final</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <ul class="divide-y divide-line">
+      <template x-for="(c, i) in lista" :key="i + '-' + c.descricao">
+        <li class="px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <div class="flex-1 min-w-48">
+            <div class="font-medium truncate" x-text="c.descricao"></div>
+            <div class="text-sm text-ink-muted"><span x-text="c.cartao"></span> · parcela <span x-text="c.atual ?? '?'"></span>/<span x-text="c.total ?? '?'"></span> · termina em <span x-text="c.fim_rotulo"></span></div>
+          </div>
+          <div class="text-sm text-ink-muted tabular-nums"><span x-text="c.restantes"></span> × <span x-text="brl(c.parcela)"></span></div>
+          <div class="font-semibold tabular-nums w-28 text-right" x-text="brl(c.falta)"></div>
+        </li>
+      </template>
+      <li x-show="lista.length === 0" class="px-5 py-4 text-ink-muted">Nenhuma compra encontrada.</li>
+    </ul>
+  </section>
+{% endif %}
+
+{% if visao.sobras %}
+  <section class="{{ cartao_css }} p-5 mb-6" aria-labelledby="titulo-sobras">
+    <h2 id="titulo-sobras" class="font-semibold flex items-center gap-2"><i data-lucide="alert-triangle" class="size-5 text-warning"></i>Parcelas antigas ainda pendentes</h2>
+    <p class="text-sm text-ink-muted mt-1">Estas parcelas estão em faturas já vencidas e não entram nos totais. Provavelmente sobraram de uma projeção; confira em Lançamentos.</p>
+    <ul class="divide-y divide-line mt-3">
+      {% for x in visao.sobras %}
+        <li class="py-2 flex flex-wrap items-center gap-x-4 text-sm"><span class="flex-1 min-w-48 truncate">{{ x.descricao }} · {{ x.cartao }}</span><span class="text-ink-muted tabular-nums">{{ x.data.strftime("%d/%m/%Y") }}</span><span class="tabular-nums">{{ (-x.valor)|reais }}</span></li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}
+
+{% if visao.meses %}
+<script src="/static/vendor/chart.umd.js"></script>
+<script>
+  const g = {{ grafico|tojson }};
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const brlG = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const datasets = [{
+    type: "bar", label: "Parcelas", data: g.valores,
+    backgroundColor: g.acima.map((a, i) => a ? css("--c-expense") : (g.passado[i] ? css("--c-ink-muted") : css("--c-primary"))), borderRadius: 6,
+  }];
+  if (g.teto > 0) {
+    datasets.push({ type: "line", label: "Teto", data: g.valores.map(() => g.teto), borderColor: css("--c-warning"),
+                    borderDash: [6, 4], pointRadius: 0, borderWidth: 2 });
+  }
+  new Chart(document.getElementById("grafico-parcelas"), {
+    data: { labels: g.rotulos, datasets },
+    options: {
+      maintainAspectRatio: false,
+      plugins: { legend: { display: g.teto > 0 }, tooltip: { callbacks: { label: (c) => c.dataset.label + ": " + brlG(c.parsed.y) } } },
+      scales: { y: { beginAtZero: true, ticks: { callback: (v) => brlG(v) } } },
+    },
+  });
+</script>
+{% endif %}
+{% endblock %}

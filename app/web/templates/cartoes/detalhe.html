@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block titulo %}{{ cartao.nome }}{% endblock %}
+{% block cabecalho %}{{ cartao.nome }}{% endblock %}
+{% block conteudo %}
+{% set campo = "w-full h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% if erro %}
+  <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+{% if total_banco is not none and (total_banco - total)|abs > 1 %}
+  <div role="status" class="mb-6 rounded-xl bg-warning/10 border border-warning/40 px-4 py-3 flex items-start gap-2 text-sm">
+    <i data-lucide="scale" class="size-5 shrink-0 mt-0.5 text-warning"></i>
+    <span>O banco informa {{ total_banco|reais }} para esta fatura; a soma dos lançamentos dá {{ total|reais }} (diferença de {{ (total_banco - total)|abs|reais }}). Confira se falta ou sobra algum lançamento.</span>
+  </div>
+{% endif %}
+
+<div x-data="{ editando: location.hash === '#editar' }" class="flex flex-wrap items-center gap-3 mb-6">
+  <nav class="flex items-center gap-1 bg-card border border-line rounded-full p-1" aria-label="Navegar entre faturas">
+    <a href="{{ link_anterior }}" aria-label="Fatura anterior" class="size-11 rounded-full flex items-center justify-center text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="chevron-left" class="size-5"></i></a>
+    <span class="font-medium w-52 shrink-0 text-center whitespace-nowrap">Fatura {{ vencimento|mes_de }}</span>
+    <a href="{{ link_proxima }}" aria-label="Próxima fatura" class="size-11 rounded-full flex items-center justify-center text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="chevron-right" class="size-5"></i></a>
+  </nav>
+  <button type="button" @click="editando = !editando" :aria-expanded="editando" class="ml-auto inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-sm text-ink-muted hover:bg-card hover:text-primary transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="pencil" class="size-4"></i>Editar cartão</button>
+  <a href="/cartoes" class="inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-sm text-ink-muted hover:bg-card transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="credit-card" class="size-4"></i>Todos os cartões</a>
+  <form x-show="editando" x-cloak method="post" action="/cartoes/{{ cartao.id }}/editar?fatura={{ competencia }}"
+        class="basis-full {{ cartao_css }} p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end text-sm">
+    <label class="flex flex-col gap-1 font-medium text-ink-muted lg:col-span-2">Nome<input name="nome" value="{{ cartao.nome }}" required class="{{ campo }}"></label>
+    <label class="flex flex-col gap-1 font-medium text-ink-muted">Cor<input type="color" name="cor" value="{{ cartao.cor }}" class="h-11 w-full rounded-xl border border-line bg-card cursor-pointer"></label>
+    <label class="flex flex-col gap-1 font-medium text-ink-muted">Limite<input data-mascara="reais" name="limite" value="{{ (cartao.limite or 0)|reais_input }}" inputmode="decimal" class="{{ campo }} tabular-nums"></label>
+    <label class="flex flex-col gap-1 font-medium text-ink-muted">Fecha dia<input name="fechamento" value="{{ cartao.dia_fechamento }}" inputmode="numeric" class="{{ campo }}"></label>
+    <label class="flex flex-col gap-1 font-medium text-ink-muted">Vence dia<input name="vencimento" value="{{ cartao.dia_vencimento }}" inputmode="numeric" class="{{ campo }}"></label>
+    <label class="flex flex-col gap-1 font-medium text-ink-muted lg:col-span-2">Paga pela conta
+      <select name="pagadora_id" class="{{ campo }}">
+        {% for c in origens %}<option value="{{ c.id }}" {% if c.id == cartao.conta_pagamento_id %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="flex flex-col gap-1 font-medium text-ink-muted">Sala VIP por ano<input name="vip_vouchers" value="{{ cartao.vip_vouchers if cartao.vip_vouchers is not none else '' }}" inputmode="numeric" placeholder="não tem" class="{{ campo }}"></label>
+    <label class="flex flex-col gap-1 font-medium text-ink-muted">Sala VIP renova em<input type="date" name="vip_renova_em" value="{{ cartao.vip_renova_em.isoformat() if cartao.vip_renova_em else '' }}" class="{{ campo }}"></label>
+    <label class="flex items-center gap-3 min-h-11 font-medium text-ink-muted cursor-pointer lg:col-span-4">
+      <input type="hidden" name="sugerir_compra" value="0">
+      <input type="checkbox" name="sugerir_compra" value="1" {% if cartao.sugerir_compra %}checked{% endif %} class="size-5 rounded accent-[var(--c-primary)] cursor-pointer">
+      Entra na sugestão de melhor cartão para comprar hoje
+    </label>
+    <p class="text-xs text-ink-muted lg:col-span-3">Mudar o fechamento ou o vencimento vale para as faturas que ainda vão fechar.</p>
+    <button class="lg:col-start-6 inline-flex items-center justify-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="check" class="size-4"></i>Salvar</button>
+  </form>
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="rounded-[20px] p-5 text-white bg-gradient-to-br from-[#1E3A8A] to-[#1E40AF] shadow-[0_4px_6px_rgba(0,0,0,0.04)]"><div class="text-sm text-white/80">Total</div><div class="text-2xl font-semibold tabular-nums">{{ total|reais }}</div>{% if detalhar %}<div class="text-xs text-white/80 tabular-nums">inclui {{ detalhar|reais }} a detalhar</div>{% endif %}</div>
+  {% set visual = {
+    "aberta": ("border-line", "bg-primary-soft text-primary", "clock", "text-ink"),
+    "fechada": ("border-warning/40", "bg-warning/15 text-warning", "lock", "text-warning"),
+    "vencida": ("border-expense/60 bg-expense/10", "bg-expense/15 text-expense", "alert-triangle", "text-expense"),
+    "paga": ("border-income/40", "bg-income/15 text-income", "check-circle", "text-income"),
+    "paga_parcial": ("border-warning/40", "bg-warning/15 text-warning", "circle-dashed", "text-warning"),
+  }[status_chave] %}
+  <div class="bg-card rounded-[20px] border shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5 flex items-center gap-3 {{ visual[0] }}">
+    <span class="size-11 rounded-full shrink-0 flex items-center justify-center {{ visual[1] }}"><i data-lucide="{{ visual[2] }}" class="size-5"></i></span>
+    <div class="min-w-0">
+      <div class="text-sm text-ink-muted">Situação</div>
+      <div class="text-2xl font-semibold {{ visual[3] }}">{{ status }}</div>
+      {% if status_chave == "vencida" %}<div class="text-xs text-expense">venceu em {{ vencimento|data_br }} · falta {{ restante|reais }}</div>{% endif %}
+    </div>
+  </div>
+  <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Fecha / vence</div><div class="text-lg font-semibold tabular-nums">{{ fechamento|data_br }} · {{ vencimento|data_br }}</div></div>
+  <div class="{{ cartao_css }} p-5"><div class="text-sm text-ink-muted">Limite disponível</div><div class="text-2xl font-semibold tabular-nums">{{ disponivel|reais }}</div></div>
+</div>
+
+{% if assinaturas is not none %}
+<section class="{{ cartao_css }} p-5 mb-6" aria-labelledby="titulo-assinaturas">
+  <h2 id="titulo-assinaturas" class="font-semibold flex items-center gap-2"><i data-lucide="repeat" class="size-5 text-primary"></i>Assinaturas desta fatura</h2>
+  {% if assinaturas.itens or assinaturas.sugestoes %}
+    {% set estados = {"confirmada": ("check-circle", "text-income", "Confirmada"), "aguardando": ("clock", "text-ink-muted", "Aguardando"), "nao_apareceu": ("alert-triangle", "text-expense", "Não apareceu")} %}
+    {% if assinaturas.itens %}
+      <ul class="divide-y divide-line mt-3">
+        {% for i in assinaturas.itens %}
+          {% set icone, cor, rotulo = estados[i.estado] %}
+          <li class="py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span class="flex-1 min-w-40 font-medium">{{ i.assinatura.nome }}</span>
+            <span class="text-ink-muted tabular-nums">esperado {{ i.valor_esperado|reais }}</span>
+            {% if i.valor_real is not none %}<span class="tabular-nums">cobrado {{ i.valor_real|reais }}{% if i.valor_real != i.valor_esperado %} <span class="text-warning">({{ (i.valor_real - i.valor_esperado)|reais }})</span>{% endif %}</span>{% endif %}
+            <span class="inline-flex items-center gap-1.5 font-medium {{ cor }}"><i data-lucide="{{ icone }}" class="size-4"></i>{{ rotulo }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    {% if assinaturas.sugestoes %}
+      <h3 class="mt-4 text-sm font-semibold">Parece assinatura, mas não está cadastrada</h3>
+      <ul class="divide-y divide-line mt-1">
+        {% for x in assinaturas.sugestoes %}
+          <li class="py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span class="flex-1 min-w-40">{{ x.descricao }}</span>
+            <span class="text-ink-muted tabular-nums">{{ x.valor|reais }} · {{ x.meses|length }} meses seguidos</span>
+            <form method="post" action="/cartoes/{{ cartao.id }}/assinaturas/cadastrar?fatura={{ competencia }}">
+              <input type="hidden" name="descricao" value="{{ x.descricao }}">
+              <button class="inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="plus" class="size-4"></i>Cadastrar</button>
+            </form>
+            <form method="post" action="/cartoes/{{ cartao.id }}/assinaturas/ignorar?fatura={{ competencia }}">
+              <input type="hidden" name="descricao" value="{{ x.descricao }}">
+              <button class="inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-ink-muted hover:text-ink hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="eye-off" class="size-4"></i>Ignorar</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% else %}
+    <p class="mt-2 text-sm text-ink-muted">Nenhuma assinatura cadastrada neste cartão. <a href="/lancamentos/assinaturas" class="text-primary font-medium hover:underline">Ver assinaturas</a></p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if status_chave != "paga" %}
+<section class="{{ cartao_css }} p-5 mb-6" aria-labelledby="titulo-parcial">
+  <div class="flex flex-wrap items-end gap-x-6 gap-y-3">
+    <div class="flex-1 min-w-64">
+      <h2 id="titulo-parcial" class="font-semibold flex items-center gap-2"><i data-lucide="smartphone" class="size-5 text-primary"></i>Total no app do banco</h2>
+      <p class="mt-1 text-sm text-ink-muted">Para a fatura aberta que ainda não tem arquivo. O que falta lançar entra como <strong class="font-medium text-ink">a detalhar</strong> no total, no saldo previsto e no limite; quando o arquivo da fatura fechada for importado, as compras dele tomam o lugar.</p>
+      {% if total_parcial is not none %}<p class="mt-1 text-sm tabular-nums">Digitado em {{ total_parcial_em|data_br }}: {{ total_parcial|reais }} · lançado {{ (total - detalhar)|reais }} · a detalhar <strong class="font-semibold">{{ detalhar|reais }}</strong></p>{% endif %}
+    </div>
+    <form method="post" action="/cartoes/{{ cartao.id }}/faturas/{{ competencia }}/parcial" class="flex items-end gap-2">
+      <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Total que o banco mostra
+        <input data-mascara="reais" name="valor" value="{{ total_parcial|reais_input if total_parcial is not none else '' }}" inputmode="decimal" placeholder="0,00" class="{{ campo }} w-40 tabular-nums">
+      </label>
+      <button class="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 bg-primary text-white hover:bg-primary-strong"><i data-lucide="check" class="size-4"></i>Salvar</button>
+    </form>
+    {% if total_parcial is not none %}
+    <form method="post" action="/cartoes/{{ cartao.id }}/faturas/{{ competencia }}/parcial">
+      <input type="hidden" name="valor" value="">
+      <button class="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 text-ink-muted hover:text-expense hover:bg-expense/10"><i data-lucide="x" class="size-4"></i>Apagar</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <section class="lg:col-span-2 {{ cartao_css }} p-5">
+    <h2 class="font-semibold mb-2">Compras <span class="text-sm font-normal text-ink-muted">({{ compras|length }})</span></h2>
+    {% if compras or detalhar %}
+    <div class="overflow-x-auto -mx-5 px-5">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-line text-left text-ink-muted">
+            {% for col, rotulo, alinhar in [("data", "Data", "text-left"), ("titulo", "Título", "text-left"), ("categoria", "Categoria", "text-left"), ("valor", "Valor", "text-right")] %}
+            {% set c = colunas[col] %}
+            <th scope="col" class="py-2 font-medium {{ alinhar }} {{ 'pl-3' if not loop.first else '' }}" {% if c.aria %}aria-sort="{{ c.aria }}"{% endif %}>
+              <a href="{{ c.link }}" class="inline-flex items-center gap-1 min-h-11 cursor-pointer rounded-lg hover:text-ink transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 {{ 'text-ink' if c.aria else '' }}"><span>{{ rotulo }}</span><i data-lucide="{{ 'arrow-down' if c.aria == 'descending' else 'arrow-up' if c.aria == 'ascending' else 'chevrons-up-down' }}" class="size-3.5 {{ '' if c.aria else 'opacity-40' }}" aria-hidden="true"></i></a>
+            </th>
+            {% endfor %}
+            <th scope="col" class="py-2 w-24"><span class="sr-only">Ações</span></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-line">
+          {% if detalhar %}
+          <tr class="bg-primary-soft/40">
+            <td class="py-2.5 tabular-nums text-ink-muted whitespace-nowrap">{{ total_parcial_em|data_br }}</td>
+            <td class="py-2.5 pl-3 font-medium">A detalhar <span class="font-normal text-ink-muted">· total do app do banco menos o lançado</span></td>
+            <td class="py-2.5 pl-3 text-ink-muted">—</td>
+            <td class="py-2.5 pl-3 text-right tabular-nums whitespace-nowrap text-expense">{{ (-detalhar)|reais }}</td>
+            <td class="py-1 pl-2"></td>
+          </tr>
+          {% endif %}
+          {% for l in compras %}
+          <tr class="hover:bg-page/60 transition-colors duration-150 {{ 'opacity-60' if l.ignorar else '' }}">
+            <td class="py-2.5 tabular-nums text-ink-muted whitespace-nowrap">{{ l.data|data_br }}</td>
+            <td class="py-2.5 pl-3"><span>{{ l.descricao }}</span>{% if l.parcela_total %} <span class="text-ink-muted">({{ l.parcela_num }}/{{ l.parcela_total }})</span>{% endif %}</td>
+            <td class="py-2.5 pl-3 {{ '' if l.categoria_id in categorias_nome else 'text-ink-muted' }}">{{ categorias_nome.get(l.categoria_id, "Sem categoria") }}</td>
+            <td class="py-2.5 pl-3 text-right tabular-nums whitespace-nowrap {{ 'text-income' if l.valor > 0 else 'text-expense' }}">{{ l.valor|reais }}</td>
+            <td class="py-1 pl-2">
+              <div class="flex justify-end">
+                <button type="button" hx-get="/lancamentos/{{ l.id }}/editar" hx-target="#modal" aria-label="Editar {{ l.descricao }}" title="Editar"
+                        class="size-11 rounded-xl flex items-center justify-center text-ink-muted hover:text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="pencil" class="size-4"></i></button>
+                {# fatura paga: excluir mudaria o total já pago. Parcelada ou recorrente: o modal pergunta o alcance #}
+                {% if status_chave != "paga" %}
+                <button type="button" {% if l.recorrencia_id or l.grupo_parcela_id %}hx-get="/lancamentos/{{ l.id }}/excluir" hx-target="#modal"{% else %}hx-post="/lancamentos/{{ l.id }}/excluir" hx-confirm="Excluir {{ l.descricao }}?"{% endif %}
+                        aria-label="Excluir {{ l.descricao }}" title="Excluir"
+                        class="size-11 rounded-xl flex items-center justify-center text-ink-muted hover:text-expense hover:bg-expense/10 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="trash-2" class="size-4"></i></button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <p class="py-3 text-sm text-ink-muted">Nenhuma compra nesta fatura.</p>
+    {% endif %}
+  </section>
+
+  <section class="{{ cartao_css }} p-5 space-y-4">
+    <h2 class="font-semibold">Pagamentos</h2>
+    {% for p in pagamentos %}
+      {% set manual = eh_manual(p) %}
+      <div class="flex items-center justify-between gap-3 text-sm">
+        <span class="tabular-nums">{{ p.data|data_br }}{% if p.status == "pendente" %} · agendado{% endif %} <span class="text-ink-muted">· {{ "manual" if manual else "importado" }}</span></span>
+        <span class="flex items-center gap-1">
+          <span class="tabular-nums">{{ p.valor|reais }}</span>
+          {% if manual %}
+          <form method="post" action="/cartoes/{{ cartao.id }}/pagamentos/{{ p.id }}/desfazer" onsubmit="return confirm('Desfazer este pagamento? O valor volta para a conta e a fatura fica em aberto.')">
+            <button aria-label="Desfazer pagamento de {{ p.data|data_br }}" title="Desfazer pagamento"
+                    class="size-11 rounded-xl flex items-center justify-center text-ink-muted hover:text-expense hover:bg-expense/10 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="undo-2" class="size-4"></i></button>
+          </form>
+          {% endif %}
+        </span>
+      </div>
+    {% else %}
+      <p class="text-sm text-ink-muted">Nenhum pagamento.</p>
+    {% endfor %}
+    {% if restante <= 0 and pagamentos %}
+      <p class="flex items-center gap-2 text-sm font-medium text-income border-t border-line pt-4"><i data-lucide="check-circle" class="size-4"></i>Fatura paga</p>
+    {% elif restante > 0 %}
+    {# pagamento manual; se depois vier no extrato ou na fatura importada, a importação concilia com ele #}
+    <script type="application/json" id="inicios-saldo">{{ inicios_saldo|tojson }}</script>
+    <div x-data="{ aberto: false, data: '{{ hoje.isoformat() }}', outros: false, parcial: false,
+                   conta: '{{ cartao.conta_pagamento_id or '' }}', inicios: JSON.parse(document.getElementById('inicios-saldo').textContent) }"
+         class="border-t border-line pt-4">
+      <button type="button" @click="aberto = true"
+              class="w-full inline-flex items-center justify-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="check" class="size-4"></i><span>{{ "Pagar fatura" if not pagamentos else "Pagar restante" }}</span></button>
+
+      <div x-show="aberto" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="aberto = false">
+        <form method="post" action="/cartoes/{{ cartao.id }}/faturas/{{ competencia }}/pagar" @click.outside="aberto = false"
+              role="dialog" aria-modal="true" aria-labelledby="titulo-pagamento"
+              class="w-full max-w-md bg-card rounded-[20px] border border-line shadow-2xl p-6 space-y-5 text-sm">
+          <div class="flex items-center justify-between">
+            <h2 id="titulo-pagamento" class="text-lg font-semibold" x-text="parcial ? 'Pagamento parcial' : 'Pagamento total'">Pagamento total</h2>
+            <button type="button" @click="aberto = false" aria-label="Fechar" class="size-11 -mr-2 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page cursor-pointer"><i data-lucide="x" class="size-5"></i></button>
+          </div>
+          <div class="space-y-2">
+            <div class="font-semibold">Cartão: {{ cartao.nome }}</div>
+            <div class="flex justify-between text-ink-muted"><span>Fatura</span><span class="text-ink font-medium">vence {{ vencimento|data_br }}</span></div>
+            <div class="flex justify-between text-ink-muted"><span>{{ "Valor total" if not pagamentos else "Falta pagar" }}</span><span class="text-ink font-semibold tabular-nums">{{ restante|reais }}</span></div>
+          </div>
+
+          <div class="flex items-center gap-3 border-b border-line pb-3">
+            <i data-lucide="calendar" class="size-5 text-ink-muted shrink-0" aria-hidden="true"></i>
+            <div class="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Data do pagamento">
+              {% set chip = "h-9 px-4 rounded-full font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+              <button type="button" role="radio" :aria-checked="!outros && data === '{{ hoje.isoformat() }}'" @click="outros = false; data = '{{ hoje.isoformat() }}'"
+                      :class="!outros && data === '{{ hoje.isoformat() }}' ? 'bg-primary text-white' : 'bg-page text-ink-muted hover:text-ink'" class="{{ chip }}">Hoje</button>
+              <button type="button" role="radio" :aria-checked="!outros && data === '{{ ontem.isoformat() }}'" @click="outros = false; data = '{{ ontem.isoformat() }}'"
+                      :class="!outros && data === '{{ ontem.isoformat() }}' ? 'bg-primary text-white' : 'bg-page text-ink-muted hover:text-ink'" class="{{ chip }}">Ontem</button>
+              <button type="button" role="radio" :aria-checked="outros" @click="outros = true"
+                      :class="outros ? 'bg-primary text-white' : 'bg-page text-ink-muted hover:text-ink'" class="{{ chip }}">Outros…</button>
+              <input x-show="outros" x-cloak type="date" x-model="data" aria-label="Outra data" class="{{ campo }} w-auto">
+            </div>
+            <input type="hidden" name="data" :value="data">
+            {# data futura = agendado (pendente); hoje ou antes = pago #}
+            <input type="hidden" name="efetivado" :value="data <= '{{ hoje.isoformat() }}' ? 'on' : ''">
+          </div>
+
+          <label class="flex items-center gap-3 border-b border-line pb-3">
+            <i data-lucide="landmark" class="size-5 text-ink-muted shrink-0" aria-hidden="true"></i>
+            <span class="sr-only">Pagar com</span>
+            <select name="conta_origem_id" x-model="conta" class="{{ campo }} flex-1">
+              {% for c in origens %}<option value="{{ c.id }}" {% if c.id == cartao.conta_pagamento_id %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+            </select>
+          </label>
+          <p x-show="inicios[conta] && data < inicios[conta]" x-cloak role="status" class="flex items-start gap-2 rounded-xl bg-warning/10 border border-warning/40 px-3 py-2">
+            <i data-lucide="info" class="size-4 shrink-0 mt-0.5 text-warning"></i>
+            <span>Esta data é anterior ao saldo inicial da conta (<span x-text="inicios[conta]?.split('-').reverse().join('/')"></span>): o pagamento fica registrado, mas não muda o saldo.</span>
+          </p>
+
+          <div>
+            <label class="flex items-center gap-3 min-h-11 cursor-pointer"><input type="checkbox" x-model="parcial" class="size-5 rounded accent-[var(--c-primary)] cursor-pointer"> Pagar outro valor</label>
+            <label x-show="parcial" x-cloak class="block font-medium text-ink-muted">Valor
+              <input data-mascara="reais" name="valor" value="{{ restante|reais_input }}" inputmode="decimal" class="{{ campo }} w-full tabular-nums"></label>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-1">
+            <button type="button" @click="aberto = false" class="h-11 px-4 rounded-xl font-medium text-ink-muted hover:bg-page cursor-pointer">Cancelar</button>
+            <button class="h-11 px-5 rounded-xl bg-primary text-white font-semibold hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+                    x-text="parcial ? 'Pagar valor' : 'Pagar total'">Pagar total</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

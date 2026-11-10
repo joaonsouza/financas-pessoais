@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+{% block titulo %}Desempenho · {{ mes|nome_mes }}{% endblock %}
+{% block cabecalho %}Desempenho & Forecast{% endblock %}
+
+{% block acoes_topo %}
+<div class="flex items-center gap-1 bg-card border border-line rounded-full p-1 text-xs">
+  <span class="text-ink-muted px-2 font-medium">Janela:</span>
+  {% for j in [3, 6, 12] %}
+    <a href="?mes={{ mes }}&janela={{ j }}"
+       class="h-8 px-3 rounded-full flex items-center font-medium transition-colors cursor-pointer {{ 'bg-primary text-white' if janela == j else 'text-ink-muted hover:text-ink' }}">
+      {{ j }}m
+    </a>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block conteudo %}
+<div class="space-y-6">
+  {# Atalhos de âncoras rápidas #}
+  <nav class="flex items-center gap-2 overflow-x-auto pb-1 text-xs text-ink-muted border-b border-line" aria-label="Navegação na página">
+    <a href="#placar" class="hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-page">Placar</a>
+    <span>•</span>
+    <a href="#alertas" class="hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-page">Alertas</a>
+    <span>•</span>
+    <a href="#insights" class="hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-page">Insights & IA</a>
+    <span>•</span>
+    <a href="#previsao" class="hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-page">Forecast de Saldo</a>
+    <span>•</span>
+    <a href="#historico" class="hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-page">Histórico</a>
+    <span>•</span>
+    <a href="#patrimonio" class="hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-page">Patrimônio</a>
+    <span>•</span>
+    <a href="#inflacao" class="hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-page">Inflação</a>
+  </nav>
+
+  {# 1. KPIs no topo #}
+  {% include "desempenho/_kpis.html" %}
+
+  {# 2. Placar do Curso #}
+  {% include "desempenho/_placar.html" %}
+
+  {# 3. Central de Alertas e Riscos #}
+  {% include "desempenho/_alertas.html" %}
+
+  {# 4. Insights determinísticos e análise IA #}
+  {% include "desempenho/_insights.html" %}
+
+  {# 5. Forecast e Previsão #}
+  {% include "desempenho/_previsao.html" %}
+
+  {# 6. Histórico Reformulado (os 4 gráficos) #}
+  {% include "desempenho/_historico.html" %}
+
+  {# 7. Inflação pessoal x IPCA #}
+  {% include "desempenho/_inflacao.html" %}
+</div>
+
+<div id="modal-drilldown"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/vendor/chart.umd.js"></script>
+<script>
+  (function() {
+    const dados = {{ dados_graficos|tojson }};
+    const estilo = getComputedStyle(document.documentElement);
+    const cor = (nome, padrao) => estilo.getPropertyValue(nome).trim() || padrao;
+
+    const C_RECEITA = cor("--c-income", "#059669");
+    const C_DESPESA = cor("--c-expense", "#DC2626");
+    const C_PRIMARIA = cor("--c-primary", "#1E40AF");
+    const C_AVISO = cor("--c-warning", "#D97706");
+    const C_MUTED = cor("--c-ink-muted", "#64748B");
+    const C_LINHA = cor("--c-line", "#E2E8F0");
+    const C_INVEST = cor("--c-card-accent", "#0D9488");
+
+    const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const compacto = (v) => Number(v).toLocaleString("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
+    const tooltipBRL = { callbacks: { label: (c) => c.dataset.label + ": " + brl(c.parsed.y ?? c.parsed.x) } };
+    const eixoBRL = { ticks: { callback: (v) => compacto(v) }, grid: { color: C_LINHA } };
+
+    // 1. Previsão de Saldo (Realizado vs Agendado vs Estimado)
+    const prevCanvas = document.getElementById("grafico-previsao-saldo");
+    if (prevCanvas) {
+      new Chart(prevCanvas, {
+        type: "line",
+        data: {
+          labels: dados.previsao_saldo.rotulos,
+          datasets: [
+            {
+              label: "Realizado",
+              data: dados.previsao_saldo.realizado,
+              borderColor: C_PRIMARIA,
+              backgroundColor: C_PRIMARIA,
+              borderWidth: 2.5,
+              tension: 0.2,
+              pointRadius: 4,
+            },
+            {
+              label: "Agendado",
+              data: dados.previsao_saldo.agendado,
+              borderColor: C_PRIMARIA,
+              backgroundColor: C_PRIMARIA,
+              borderWidth: 2,
+              borderDash: [6, 4],
+              tension: 0.2,
+              pointRadius: 3,
+            },
+            {
+              label: "Estimado",
+              data: dados.previsao_saldo.estimado,
+              borderColor: C_AVISO,
+              backgroundColor: C_AVISO,
+              borderWidth: 2,
+              borderDash: [4, 4],
+              tension: 0.2,
+              pointRadius: 3,
+            }
+          ]
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: tooltipBRL },
+          scales: { y: eixoBRL, x: { grid: { display: false } } }
+        }
+      });
+    }
+
+    // 2. Curva diária de 30 dias
+    const c30Canvas = document.getElementById("grafico-curva-30");
+    if (c30Canvas) {
+      new Chart(c30Canvas, {
+        type: "line",
+        data: {
+          labels: dados.curva_30.rotulos,
+          datasets: [{
+            label: "Saldo líquido",
+            data: dados.curva_30.valores,
+            borderColor: C_PRIMARIA,
+            backgroundColor: C_PRIMARIA + "15",
+            fill: true,
+            borderWidth: 1.5,
+            tension: 0.1,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+          }]
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: tooltipBRL },
+          scales: {
+            y: { ticks: { callback: (v) => compacto(v) }, grid: { color: C_LINHA } },
+            x: { ticks: { maxTicksLimit: 8 }, grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    // 3. Receitas x Despesas com Taxa de Poupança
+    const rdCanvas = document.getElementById("grafico-rd");
+    if (rdCanvas) {
+      new Chart(rdCanvas, {
+        type: "bar",
+        data: {
+          labels: dados.rd.rotulos,
+          datasets: [
+            {
+              label: "Receitas Efetivadas",
+              data: dados.rd.receitas_ef,
+              backgroundColor: C_RECEITA,
+              stack: "rec",
+              borderRadius: 4,
+            },
+            {
+              label: "Receitas Pendentes",
+              data: dados.rd.receitas_pend,
+              backgroundColor: C_RECEITA + "55",
+              stack: "rec",
+              borderRadius: 4,
+            },
+            {
+              label: "Despesas Efetivadas",
+              data: dados.rd.despesas_ef,
+              backgroundColor: C_DESPESA,
+              stack: "desp",
+              borderRadius: 4,
+            },
+            {
+              label: "Despesas Pendentes",
+              data: dados.rd.despesas_pend,
+              backgroundColor: C_DESPESA + "55",
+              stack: "desp",
+              borderRadius: 4,
+            },
+            {
+              type: "line",
+              label: "Taxa de Poupança (%)",
+              data: dados.rd.taxas_poupanca,
+              borderColor: C_PRIMARIA,
+              yAxisID: "y2",
+              tension: 0.3,
+              pointRadius: 3,
+            }
+          ]
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: "bottom", labels: { boxWidth: 12 } },
+            tooltip: {
+              callbacks: {
+                label: (c) => c.dataset.yAxisID === "y2"
+                  ? c.dataset.label + ": " + (c.parsed.y ?? "—") + "%"
+                  : c.dataset.label + ": " + brl(c.parsed.y)
+              }
+            }
+          },
+          scales: {
+            x: { grid: { display: false } },
+            y: { ...eixoBRL, title: { display: true, text: "Valores (R$)" } },
+            y2: {
+              position: "right",
+              grid: { display: false },
+              ticks: { callback: (v) => v + "%" },
+              title: { display: true, text: "Poupança (%)" }
+            }
+          }
+        }
+      });
+    }
+
+    // 4. Patrimônio (Área empilhada)
+    const patCanvas = document.getElementById("grafico-patrimonio");
+    if (patCanvas) {
+      new Chart(patCanvas, {
+        type: "line",
+        data: {
+          labels: dados.patrimonio.rotulos,
+          datasets: [
+            {
+              label: "Saldo Líquido",
+              data: dados.patrimonio.saldo_liquido,
+              borderColor: C_PRIMARIA,
+              backgroundColor: C_PRIMARIA + "30",
+              fill: true,
+              tension: 0.3,
+              pointRadius: 3,
+            },
+            {
+              label: "Investimentos",
+              data: dados.patrimonio.investimentos,
+              borderColor: C_INVEST,
+              backgroundColor: C_INVEST + "30",
+              fill: true,
+              tension: 0.3,
+              pointRadius: 3,
+            }
+          ]
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { position: "bottom" }, tooltip: tooltipBRL },
+          scales: { y: { stacked: true, ...eixoBRL }, x: { grid: { display: false } } }
+        }
+      });
+    }
+
+    // 5. Fixos x Variáveis x Dívidas
+    const fvCanvas = document.getElementById("grafico-fv");
+    if (fvCanvas) {
+      new Chart(fvCanvas, {
+        type: "bar",
+        data: {
+          labels: dados.fixos_vars.rotulos,
+          datasets: [
+            { label: "Fixos", data: dados.fixos_vars.fixos, backgroundColor: C_PRIMARIA, stack: "fv" },
+            { label: "Variáveis", data: dados.fixos_vars.variaveis, backgroundColor: C_AVISO, stack: "fv" },
+            { label: "Dívidas", data: dados.fixos_vars.dividas, backgroundColor: C_DESPESA, stack: "fv" },
+            {
+              type: "line",
+              label: "Média Despesas",
+              data: dados.fixos_vars.rotulos.map(() => dados.fixos_vars.media),
+              borderColor: C_MUTED,
+              borderDash: [5, 5],
+              pointRadius: 0,
+            }
+          ]
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { position: "bottom" }, tooltip: tooltipBRL },
+          scales: { y: { stacked: true, ...eixoBRL }, x: { grid: { display: false } } }
+        }
+      });
+    }
+
+    // 6. Inflação pessoal x IPCA (barras: mês; linhas: acumulado)
+    const infCanvas = document.getElementById("grafico-inflacao");
+    if (infCanvas) {
+      const pctBR = (v) => v == null ? "dados insuficientes"
+        : Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 2 }) + "%";
+      new Chart(infCanvas, {
+        type: "bar",
+        data: {
+          labels: dados.inflacao.rotulos,
+          datasets: [
+            { type: "line", label: "Minha inflação (acumulada)", data: dados.inflacao.acum_pessoal,
+              borderColor: C_DESPESA, backgroundColor: C_DESPESA, tension: 0.3, pointRadius: 3 },
+            { type: "line", label: "IPCA (acumulado)", data: dados.inflacao.acum_ipca,
+              borderColor: C_MUTED, backgroundColor: C_MUTED, borderDash: [5, 5], tension: 0.3, pointRadius: 3 },
+            { label: "Minha inflação no mês", data: dados.inflacao.pessoal,
+              backgroundColor: C_DESPESA + "40", barPercentage: 0.4 },
+          ]
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: "bottom" },
+            tooltip: { callbacks: { label: (c) => c.dataset.label + ": " + pctBR(c.parsed.y) } }
+          },
+          scales: { y: { ticks: { callback: (v) => v + "%" }, grid: { color: C_LINHA } }, x: { grid: { display: false } } }
+        }
+      });
+    }
+  })();
+</script>
+{% endblock %}

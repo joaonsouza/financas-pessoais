@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block titulo %}DARF{% endblock %}
+{% block cabecalho %}DARF · imposto mensal{% endblock %}
+{% block conteudo %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set selo = "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold" %}
+{% set rotulo_situacao = {"pagar": "A pagar", "pago": "Pago", "isento": "Isento", "prejuizo": "Prejuízo", "acumula": "Abaixo de R$ 10: acumula"} %}
+
+<a href="/investimentos" class="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink mb-4 min-h-11 cursor-pointer"><i data-lucide="chevron-left" class="size-4"></i>Investimentos</a>
+
+{# a resposta: preciso pagar? #}
+<section class="{{ cartao_css }} p-5 mb-4 flex flex-wrap items-center gap-4">
+  {% if a_pagar %}
+  <span class="size-11 rounded-full bg-warning/15 text-warning flex items-center justify-center"><i data-lucide="receipt" class="size-5"></i></span>
+  <div class="flex-1 min-w-0">
+    <p class="text-lg font-semibold">Você tem <span class="tabular-nums">{{ a_pagar|reais }}</span> em DARF a pagar</p>
+    <p class="text-sm text-ink-muted">{% if vencidos %}{{ vencidos }} {{ "guia vencida" if vencidos == 1 else "guias vencidas" }}: o Sicalc calcula multa e juros na emissão. {% endif %}Emita a guia no Sicalc com o código, o mês (período de apuração) e o valor de cada linha; depois marque como paga.</p>
+  </div>
+  {% else %}
+  <span class="size-11 rounded-full bg-income/15 text-income flex items-center justify-center"><i data-lucide="check" class="size-5"></i></span>
+  <div class="flex-1 min-w-0">
+    <p class="text-lg font-semibold">Nada a pagar</p>
+    <p class="text-sm text-ink-muted">Nenhuma venda com imposto pendente.</p>
+  </div>
+  {% endif %}
+  <a href="{{ sicalc }}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="external-link" class="size-4"></i>Abrir o Sicalc</a>
+</section>
+
+<section class="{{ cartao_css }} overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm min-w-[820px]">
+      <thead class="text-xs text-ink-muted">
+        <tr class="border-b border-line">
+          <th scope="col" class="text-left font-medium px-5 py-2">Mês</th>
+          <th scope="col" class="text-left font-medium px-3 py-2">Guia</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Vendido</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Lucro / prejuízo</th>
+          <th scope="col" class="text-left font-medium px-3 py-2">Situação</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Valor</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Vencimento</th>
+          <th scope="col" class="px-5 py-2"><span class="sr-only">Ações</span></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-line">
+        {% for l in linhas %}
+        <tr class="{{ 'bg-warning/5' if l.situacao == 'pagar' }}">
+          <td class="px-5 py-3 tabular-nums whitespace-nowrap">{{ l.competencia[5:] }}/{{ l.competencia[:4] }}</td>
+          <td class="px-3 py-3">{{ l.rotulo }}<span class="block text-xs text-ink-muted tabular-nums">código {{ l.codigo }}</span></td>
+          <td class="px-3 py-3 text-right tabular-nums">{{ l.vendido|reais }}</td>
+          <td class="px-3 py-3 text-right tabular-nums {{ 'text-income' if l.resultado > 0 else ('text-expense' if l.resultado < 0 else 'text-ink-muted') }}">{{ l.resultado|reais }}</td>
+          <td class="px-3 py-3">
+            {% if l.situacao == "pagar" %}<span class="{{ selo }} {{ 'bg-expense/10 text-expense' if l.vencido else 'bg-warning/15 text-warning' }}"><i data-lucide="alert-triangle" class="size-3"></i>{{ "Vencida" if l.vencido else "A pagar" }}</span>
+            {% elif l.situacao == "pago" %}<span class="{{ selo }} bg-income/10 text-income"><i data-lucide="check" class="size-3"></i>Pago em {{ l.pago_em|data_br }}</span>
+            {% elif l.situacao == "prejuizo" and l.resultado > 0 %}<span class="{{ selo }} bg-page text-ink-muted">Lucro abatido do prejuízo anterior</span>
+            {% else %}<span class="{{ selo }} bg-page text-ink-muted">{{ rotulo_situacao[l.situacao] }}</span>{% endif %}
+          </td>
+          <td class="px-3 py-3 text-right tabular-nums font-medium">{% if l.valor %}{{ l.valor|reais }}{% elif l.imposto %}<span class="text-xs text-ink-muted font-normal">{{ l.imposto|reais }} vai para o próximo</span>{% else %}—{% endif %}</td>
+          <td class="px-3 py-3 text-right tabular-nums whitespace-nowrap">{% if l.valor %}{{ l.vencimento|data_br }}{% else %}—{% endif %}</td>
+          <td class="px-5 py-2 text-right whitespace-nowrap">
+            {% if l.situacao in ("pagar", "pago") %}
+            <form method="post" action="/investimentos/darf/{{ l.competencia }}/{{ l.codigo }}/pago">
+              <button class="inline-flex items-center gap-1.5 rounded-xl px-3 h-9 text-sm font-medium cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 {{ 'bg-primary-soft text-primary hover:opacity-80' if l.situacao == 'pagar' else 'text-ink-muted hover:bg-page' }}">
+                {% if l.situacao == "pagar" %}<i data-lucide="check" class="size-4"></i>Paguei{% else %}Desfazer{% endif %}
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="px-5 py-6 text-center text-ink-muted">Nenhuma venda de ação, ETF, FII ou cripto ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+<p class="text-xs text-ink-muted mt-3">Regras: ações, ETFs e BDRs 15% e FIIs 20% (código 6015, mesma guia); ações isentas com até R$ 20 mil vendidos no mês; cripto 15% (código 4600), isenta até R$ 35 mil vendidos no mês. Prejuízo abate lucro futuro da mesma categoria (comum ou FII; cripto não compensa). ETF de renda fixa tem IR retido na fonte e exterior vai na declaração anual. Imposto abaixo de R$ 10 acumula para o mês seguinte. Vencimento no último dia útil do mês seguinte, sem contar feriados.</p>
+{% endblock %}

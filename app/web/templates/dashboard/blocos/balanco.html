@@ -1,0 +1,35 @@
+{# Balanço mensal pelo previsto do mês: a barra tem a altura do previsto; a parte cheia é o realizado #}
+{% set rec, desp = totais.receitas_projetado, totais.despesas_projetado %}
+{% set rec_ok, desp_ok = totais.receitas_efetivado, totais.despesas_efetivado %}
+{% set maior = [rec, desp, rec_ok, desp_ok, 1]|max %}
+{% macro barra(previsto, realizado, cor, rotulo) %}
+  <div class="relative w-10 h-full flex items-end" title="{{ rotulo }}: previsto {{ previsto|reais }}, realizado {{ realizado|reais }}">
+    <div class="absolute bottom-0 inset-x-0 rounded-t-xl rounded-b-md {{ cor }} opacity-30" style="height: {{ [[previsto, realizado]|max * 100 / maior, 2]|max }}%"></div>
+    <div class="relative w-full rounded-t-xl rounded-b-md {{ cor }}" style="height: {{ [realizado * 100 / maior, 0]|max }}%"></div>
+  </div>
+{% endmacro %}
+<section class="bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5" aria-labelledby="titulo-balanco">
+  <h2 id="titulo-balanco" class="font-semibold mb-4">Balanço mensal <span class="text-xs font-normal text-ink-muted">previsto</span></h2>
+  <div class="flex items-end gap-6">
+    <div class="flex items-end gap-3 h-36 shrink-0" role="img"
+         aria-label="Receitas previstas {{ rec|reais }} ({{ rec_ok|reais }} realizadas), despesas previstas {{ desp|reais }} ({{ desp_ok|reais }} realizadas)">
+      {{ barra(rec, rec_ok, "bg-income", "Receitas") }}
+      {{ barra(desp, desp_ok, "bg-expense", "Despesas") }}
+    </div>
+    <dl class="flex-1 min-w-0 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 text-sm tabular-nums">
+      <dt class="flex items-center gap-2 text-ink-muted"><span class="size-2.5 rounded-full bg-income shrink-0"></span>Receitas</dt>
+      <dd class="text-right"><span class="font-medium text-income">{{ rec|reais }}</span><span class="block text-xs text-ink-muted">realizado {{ rec_ok|reais }}</span></dd>
+      <dt class="flex items-center gap-2 text-ink-muted"><span class="size-2.5 rounded-full bg-expense shrink-0"></span>Despesas</dt>
+      <dd class="text-right"><span class="font-medium text-expense">{{ desp|reais }}</span><span class="block text-xs text-ink-muted">realizado {{ desp_ok|reais }}</span></dd>
+      <dt class="col-span-2 border-t border-line my-1" aria-hidden="true"></dt>
+      <dt class="font-semibold">Balanço previsto</dt>
+      <dd class="text-right font-semibold {{ 'text-income' if totais.balanco_projetado > 0 else 'text-expense' if totais.balanco_projetado < 0 else '' }}">{{ totais.balanco_projetado|reais }}</dd>
+      <dt class="text-xs text-ink-muted">Realizado até agora</dt>
+      <dd class="text-right text-xs text-ink-muted">{{ totais.balanco_efetivado|reais }}</dd>
+    </dl>
+  </div>
+  <p class="mt-3 flex items-center gap-3 text-xs text-ink-muted">
+    <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-sm bg-ink-muted"></span>realizado</span>
+    <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-sm bg-ink-muted opacity-30"></span>a realizar</span>
+  </p>
+</section>

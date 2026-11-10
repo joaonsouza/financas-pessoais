@@ -1,0 +1,326 @@
+{% from "_seletor_categoria.html" import seletor_categoria with context %}
+{% set campo = "w-full h-11 rounded-xl border border-line bg-card px-3 text-ink focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set acentos = {
+  "despesa": {"texto": "text-expense", "borda": "focus-within:border-expense", "botao": "bg-expense hover:opacity-90", "chip": "bg-expense/10 text-expense", "chave": "peer-checked:bg-expense"},
+  "receita": {"texto": "text-income", "borda": "focus-within:border-income", "botao": "bg-income hover:opacity-90", "chip": "bg-income/10 text-income", "chave": "peer-checked:bg-income"},
+  "transferencia": {"texto": "text-primary", "borda": "focus-within:border-primary", "botao": "bg-primary hover:bg-primary-strong", "chip": "bg-primary-soft text-primary", "chave": "peer-checked:bg-primary"},
+  "cartao": {"texto": "text-card-accent", "borda": "focus-within:border-card-accent", "botao": "bg-card-accent hover:opacity-90", "chip": "bg-card-accent/10 text-card-accent", "chave": "peer-checked:bg-card-accent"},
+} %}
+{% set ac = acentos[tipo] %}
+{% set abrir_detalhes = form.tags or form.observacao or form.meta_id or (not edicao and form.repetir != "nao") %}
+{% set chip = "inline-flex items-center px-3 h-11 rounded-xl " ~ ac.chip ~ " text-sm font-medium hover:opacity-80 transition-opacity duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+<div {% if recarregar %}data-recarregar="1" {% endif %}class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4 overflow-y-auto">
+  <form hx-post="{{ acao }}" hx-target="#modal"
+        x-data="{ repetir: '{{ form.repetir }}', regra: '{{ form.regra }}', unidade: '{{ form.unidade }}', n: {{ form.intervalo|int(1) }}, fimTipo: '{{ form.fim_tipo }}',
+                 unidadeEf() { return this.regra === 'custom' ? this.unidade : ({ mensal: 'mes', semanal: 'semana', anual: 'ano' })[this.regra] },
+                 nEf() { return this.regra === 'custom' ? (this.n || 1) : 1 }, contaId: '{{ form.conta_id }}', reservas: {{ (contas_reserva or [])|tojson }},
+                 destinoId: '{{ form.conta_destino_id }}', caixinha: '{{ form.caixinha_id }}', caixinhas: {{ (caixinhas_opcoes or [])|tojson|forceescape }},
+                 detalhes: {{ 'true' if abrir_detalhes else 'false' }} }"
+        @keydown.escape.window="fecharModal()"
+        {# em tela larga, "Mais detalhes" abre numa coluna à direita e o modal alarga, em vez de crescer para baixo #}
+        :class="detalhes && 'lg:max-w-4xl'"
+        class="bg-card text-ink rounded-3xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-full overflow-y-auto transition-[max-width] duration-200">
+    <div class="flex items-center justify-between">
+      <h2 class="text-lg font-semibold {{ ac.texto }}">{{ titulo }}</h2>
+      <button type="button" aria-label="Fechar" onclick="fecharModal()"
+              class="size-11 -mr-2 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+        <i data-lucide="x" class="size-5"></i>
+      </button>
+    </div>
+
+    {% if salvo %}
+      <div role="status" class="rounded-xl bg-income/10 border border-income/30 text-income px-3 py-2 text-sm flex items-center gap-2">
+        <i data-lucide="check-circle" class="size-5 shrink-0"></i><span>Lançamento salvo</span>
+      </div>
+    {% endif %}
+    {% if erro %}
+      <div role="alert" class="rounded-xl bg-expense/10 border border-expense/30 text-expense px-3 py-2 text-sm flex items-start gap-2">
+        <i data-lucide="alert-circle" class="size-5 shrink-0"></i><span>{{ erro }}</span>
+      </div>
+    {% endif %}
+    {% if fatura_paga and not erro %}
+      <div role="status" class="rounded-xl bg-warning/10 border border-warning/40 px-3 py-2 text-sm flex items-start gap-2">
+        <i data-lucide="lock" class="size-5 shrink-0 text-warning"></i><span>Fatura já paga: valor, data e fatura não mudam. Categoria, descrição e tags podem mudar.</span>
+      </div>
+    {% endif %}
+    {% if serie %}
+      {% set escopo = form.get("escopo") or "este" %}
+      {% set opcoes = [("este", "Só esta parcela"), ("proximos", "Esta e as próximas"), ("todos", "Todas")] if serie == "parcela" else [("este", "Só este"), ("proximos", "Este e os próximos"), ("todos", "Todos")] %}
+      <fieldset class="rounded-xl border border-line p-3 space-y-2">
+        <legend class="px-1 text-sm font-medium text-ink-muted flex items-center gap-1.5"><i data-lucide="{{ 'layers' if serie == 'parcela' else 'repeat' }}" class="size-4"></i>{{ "Compra parcelada" if serie == "parcela" else "Lançamento recorrente" }}: aplicar a</legend>
+        <div class="flex flex-wrap gap-2" role="radiogroup">
+          {% for valor, rotulo in opcoes %}
+            <label class="cursor-pointer">
+              <input type="radio" name="escopo" value="{{ valor }}" {{ "checked" if valor == escopo }} class="peer sr-only">
+              <span class="inline-flex items-center h-11 px-4 rounded-full border border-line text-sm font-medium text-ink-muted peer-checked:bg-primary peer-checked:border-primary peer-checked:text-white peer-focus-visible:ring-4 peer-focus-visible:ring-primary/30 hover:border-primary transition-colors duration-150">{{ rotulo }}</span>
+            </label>
+          {% endfor %}
+        </div>
+        <p class="text-xs text-ink-muted">Nos outros muda só o que você alterar aqui (valor, descrição, categoria, tags, observação ou dia). Pago/pendente e fatura ficam de cada um.</p>
+      </fieldset>
+    {% elif recorrente %}
+      <p class="text-xs text-ink-muted">Esta edição vale só para este lançamento. Os próximos seguem a meta que criou a recorrência.</p>
+    {% endif %}
+
+    <input type="hidden" name="tipo" value="{{ tipo }}">
+    {% if recarregar %}<input type="hidden" name="recarregar" value="1">{% endif %}
+
+    <div class="lg:flex lg:items-start lg:gap-6">
+    <div class="flex-1 min-w-0 space-y-4">
+    {% if favoritos %}
+      <div class="flex flex-wrap gap-2" aria-label="Favoritos">
+        {% for f in favoritos %}
+          <button type="button" data-favorito data-descricao="{{ f.descricao }}" data-categoria="{{ f.categoria_id or '' }}" data-conta="{{ f.conta_id or '' }}"
+                  @click="const d = $el.dataset; $refs.descricao.value = d.descricao;
+                          definirCategoria($el.closest('form'), 'categoria_id', d.categoria);
+                          if ($refs.conta && d.conta) { $refs.conta.value = d.conta; $refs.conta.dispatchEvent(new Event('change')) }"
+                  class="{{ chip }} gap-1.5"><i data-lucide="heart" class="size-4 fill-current"></i>{{ f.descricao }}</button>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <label class="block">
+      <span class="text-sm font-medium text-ink-muted">Valor</span>
+      <span class="flex items-baseline gap-2 border-b-2 border-line {{ ac.borda }} transition-colors duration-150">
+        <span class="text-xl font-medium text-ink-muted">R$</span>
+        <input data-mascara="conta" name="valor" value="{{ form.valor }}" required inputmode="text" autocomplete="off" autofocus placeholder="0,00"
+               class="w-full min-w-0 bg-transparent text-4xl font-semibold tabular-nums outline-none py-1 {{ ac.texto }}">
+        <i data-lucide="calculator" class="size-5 shrink-0 text-ink-muted self-center" title="Aceita contas: 12,50+8" aria-label="Aceita contas: 12,50+8"></i>
+      </span>
+    </label>
+
+    <div>
+      <span class="text-sm font-medium text-ink-muted">Descrição</span>
+      <div class="flex items-center gap-2">
+      <input name="descricao" x-ref="descricao" value="{{ form.descricao }}" list="descricoes" autocomplete="off"
+             @change="fetch('/lancamentos/sugestao?descricao=' + encodeURIComponent($event.target.value))
+                        .then(r => r.json())
+                        .then(d => { if (d.categoria_id) definirCategoria($event.target.closest('form'), 'categoria_id', d.categoria_id);
+                                     if (d.conta_id && $refs.conta) { $refs.conta.value = d.conta_id; $refs.conta.dispatchEvent(new Event('change')) } })"
+             class="{{ campo }}">
+      {% include "lancamentos/_favorito.html" %}
+      </div>
+      <datalist id="descricoes">{% for d in descricoes %}<option value="{{ d }}">{% endfor %}</datalist>
+    </div>
+
+    <div>
+      <span class="text-sm font-medium text-ink-muted">Data</span>
+      <div class="flex flex-wrap gap-2 items-center">
+        <input type="date" name="data" x-ref="data" value="{{ form.data }}" required class="{{ campo }} !w-auto">
+        <button type="button" @click="$refs.data.value = '{{ hoje.isoformat() }}'" class="{{ chip }}">Hoje</button>
+        <button type="button" @click="$refs.data.value = new Date(new Date('{{ hoje.isoformat() }}T12:00').getTime() - 864e5).toISOString().slice(0, 10)" class="{{ chip }}">Ontem</button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <label class="block">
+        <span class="text-sm font-medium text-ink-muted">{{ "Cartão" if tipo == "cartao" else ("Conta de origem" if tipo == "transferencia" else "Conta") }}</span>
+        <select name="conta_id" x-ref="conta" x-model="contaId" required {% if conta_fixa %}disabled{% endif %} class="{{ campo }}">
+          <option value="">Escolha…</option>
+          {% for c in contas %}<option value="{{ c.id }}" {% if form.conta_id == c.id|string %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+        </select>
+        {% if conta_fixa %}<input type="hidden" name="conta_id" value="{{ form.conta_id }}">{% endif %}
+      </label>
+      {% if tipo == "transferencia" and not edicao %}
+        <label class="block">
+          <span class="text-sm font-medium text-ink-muted">Conta de destino</span>
+          <select name="conta_destino_id" x-model="destinoId" required class="{{ campo }}">
+            <option value="">Escolha…</option>
+            {% for c in destinos %}<option value="{{ c.id }}" {% if form.conta_destino_id == c.id|string %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+          </select>
+        </label>
+      {% elif tipo != "transferencia" %}
+        <div class="block">
+          <span class="text-sm font-medium text-ink-muted">Categoria</span>
+          {{ seletor_categoria("categoria_id", form.categoria_id, "receita" if tipo == "receita" else "despesa", criar=true) }}
+        </div>
+      {% endif %}
+    </div>
+
+    {% if tipo != "cartao" and caixinhas_opcoes %}
+      {# conta dividida em caixinhas: de qual sai (ou em qual entra) o dinheiro; vazio = Livre #}
+      <label class="block" x-show="caixinhas.some(c => c.conta == contaId || c.conta == destinoId)" x-cloak>
+        <span class="text-sm font-medium text-ink-muted flex items-center gap-1.5"><i data-lucide="piggy-bank" class="size-4"></i>Caixinha</span>
+        <select name="caixinha_id" x-model="caixinha" class="{{ campo }}">
+          <option value="">Livre (sem caixinha)</option>
+          <template x-for="c in caixinhas.filter(c => c.conta == contaId || c.conta == destinoId)" :key="c.id">
+            <option :value="String(c.id)" x-text="c.nome + ' · ' + c.conta_nome" :selected="String(c.id) === caixinha"></option>
+          </template>
+        </select>
+        <span class="block text-xs text-ink-muted mt-1">{{ "Em qual caixinha o dinheiro entra (ou de qual sai)." if tipo == "transferencia" else ("Em qual caixinha a receita entra." if tipo == "receita" else "De qual caixinha o gasto sai.") }}</span>
+      </label>
+    {% endif %}
+
+    {% if tipo in ("despesa", "transferencia") and not edicao and contas_reserva %}
+      <fieldset x-show="reservas.includes(Number(contaId))" x-cloak class="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-sm space-y-1">
+        <legend class="px-1 text-sm font-medium text-warning flex items-center gap-1.5"><i data-lucide="shield-alert" class="size-4"></i>Saque da reserva de emergência</legend>
+        <p class="text-xs text-ink-muted">Responda antes de usar a reserva. Isso não bloqueia o lançamento; as respostas ficam na observação.</p>
+        <input type="hidden" name="checklist_reserva" value="enviado" :disabled="!reservas.includes(Number(contaId))">
+        {% for chave, pergunta in [("inesperado", "É inesperado?"), ("necessario", "É necessário?"), ("urgente", "É urgente?")] %}
+          <label class="flex items-center gap-3 min-h-11 cursor-pointer"><input type="checkbox" name="checklist_reserva" value="{{ chave }}" :disabled="!reservas.includes(Number(contaId))" class="size-5 rounded accent-[var(--c-primary)] cursor-pointer">{{ pergunta }}</label>
+        {% endfor %}
+        <p class="text-xs text-ink-muted">Ao salvar, o app cria o objetivo "Repor reserva" com prazo de 6 meses.</p>
+      </fieldset>
+    {% endif %}
+
+    {% if faturas %}
+      <label class="block">
+        <span class="text-sm font-medium text-ink-muted">Fatura</span>
+        {# uma lista por cartão, com o vencimento de cada fatura; só a do cartão escolhido vai no envio #}
+        <select name="fatura" x-show="!{{ faturas_cartao.keys()|list|tojson|forceescape }}.includes(contaId)" :disabled="{{ faturas_cartao.keys()|list|tojson|forceescape }}.includes(contaId)" class="{{ campo }}">
+          <option value="">Automática (pela data)</option>
+          {% for comp, rotulo in faturas %}<option value="{{ comp }}" {% if form.fatura == comp %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+        </select>
+        {% for cid, opcoes in faturas_cartao.items() %}
+        <select name="fatura" x-show="contaId === '{{ cid }}'" x-cloak :disabled="contaId !== '{{ cid }}'" aria-label="Fatura" class="{{ campo }}">
+          <option value="">Automática (pela data)</option>
+          {% for comp, rotulo in opcoes %}<option value="{{ comp }}" {% if form.fatura == comp %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+        </select>
+        {% endfor %}
+      </label>
+    {% endif %}
+
+    {# no cartão quem paga é a fatura: a compra lançada à mão fica pendente e a fatura importada a confirma #}
+    {% if tipo != "cartao" %}
+    <label class="flex items-center gap-3 text-sm min-h-11 cursor-pointer">
+      <input type="checkbox" name="efetivado" {% if form.efetivado %}checked{% endif %} class="size-5 rounded accent-[var(--c-primary)] cursor-pointer">
+      {{ "Recebida" if tipo == "receita" else "Paga / efetivada" }}
+    </label>
+    {% endif %}
+
+    <label class="flex items-center gap-3 text-sm min-h-11 cursor-pointer" title="Fica na lista, mas não entra em saldos nem totais">
+      <input type="checkbox" name="ignorar" {% if form.ignorar %}checked{% endif %} class="size-5 rounded accent-[var(--c-primary)] cursor-pointer">
+      Ignorar transação
+    </label>
+
+    {% set chave = "inline-block relative shrink-0 w-11 h-6 rounded-full bg-line " ~ ac.chave ~ " peer-focus-visible:ring-4 peer-focus-visible:ring-primary/30 transition-colors duration-150 after:absolute after:top-0.5 after:left-0.5 after:size-5 after:rounded-full after:bg-white after:shadow after:transition-transform after:duration-150 peer-checked:after:translate-x-5" %}
+    <div class="border-t border-line pt-2">
+      <button type="button" @click="detalhes = !detalhes" :aria-expanded="detalhes" aria-controls="mais-detalhes"
+              class="w-full flex items-center justify-between min-h-11 text-sm font-medium text-ink-muted hover:text-ink transition-colors duration-150 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+        Mais detalhes
+        <span class="inline-flex transition-transform duration-150" :class="detalhes && 'rotate-180'"><i data-lucide="chevron-down" class="size-5"></i></span>
+      </button>
+    </div>
+    </div>
+      <div id="mais-detalhes" x-show="detalhes" {% if not abrir_detalhes %}x-cloak{% endif %} class="space-y-3 pt-2 lg:pt-0 lg:w-96 lg:shrink-0 lg:border-l lg:border-line lg:pl-6">
+        <label class="block">
+          <span class="text-sm font-medium text-ink-muted flex items-center gap-1.5"><i data-lucide="tag" class="size-4"></i>Tags (separadas por vírgula)</span>
+          <input name="tags" value="{{ form.tags }}" class="{{ campo }}">
+        </label>
+
+        <label class="block">
+          <span class="text-sm font-medium text-ink-muted flex items-center gap-1.5"><i data-lucide="pencil" class="size-4"></i>Observação</span>
+          <textarea name="observacao" rows="2" class="{{ campo }} !h-auto py-2">{{ form.observacao }}</textarea>
+        </label>
+
+        {% if tipo != "cartao" and objetivos_opcoes %}
+          <label class="block">
+            <span class="text-sm font-medium text-ink-muted flex items-center gap-1.5"><i data-lucide="target" class="size-4"></i>Objetivo</span>
+            <select name="meta_id" class="{{ campo }}">
+              <option value="">Nenhum</option>
+              {% for o in objetivos_opcoes %}<option value="{{ o.id }}" {% if form.meta_id == o.id|string %}selected{% endif %}>{{ o.nome }}</option>{% endfor %}
+            </select>
+            <span class="block text-xs text-ink-muted mt-1">{{ "Despesa guardada no objetivo (ou receita retirada dele): conta no progresso." if tipo != "transferencia" else "Transferência para a conta do objetivo." }}</span>
+          </label>
+        {% endif %}
+
+        {% if not edicao %}
+          <input type="hidden" name="repetir" :value="repetir">
+          <label class="flex items-center gap-3 min-h-11 cursor-pointer">
+            <i data-lucide="pin" class="size-5 text-ink-muted shrink-0"></i>
+            <span class="flex-1 text-sm">{{ {"receita": "Receita fixa", "transferencia": "Transferência fixa"}.get(tipo, "Despesa fixa") }}
+              <span class="block text-xs text-ink-muted">Repete todo mês, sem data para acabar.</span></span>
+            <input type="checkbox" role="switch" class="peer sr-only" :checked="repetir === 'fixa'"
+                   @change="repetir = $event.target.checked ? 'fixa' : 'nao'">
+            <span aria-hidden="true" class="{{ chave }}"></span>
+          </label>
+
+          <div x-show="repetir === 'fixa'" x-cloak class="space-y-3 pl-8">
+            <input type="hidden" name="unidade" :value="unidadeEf()" :disabled="repetir !== 'fixa'">
+            <input type="hidden" name="intervalo" :value="nEf()" :disabled="repetir !== 'fixa'">
+            <label class="flex flex-col gap-1 text-sm text-ink-muted font-medium">Repete
+              <select x-model="regra" class="{{ campo }} font-normal">
+                <option value="mensal">Todo mês (no dia da data)</option>
+                <option value="semanal">Toda semana (no dia da semana da data)</option>
+                <option value="anual">Todo ano (na data)</option>
+                <option value="custom">Personalizado…</option>
+              </select>
+            </label>
+            <div x-show="regra === 'custom'" x-cloak class="space-y-3 rounded-xl border border-line p-3">
+              <div class="flex items-center gap-2 text-sm">Repetir a cada
+                <input x-model.number="n" inputmode="numeric" aria-label="Intervalo" class="{{ campo }} !w-20 text-center">
+                <select x-model="unidade" aria-label="Unidade" class="{{ campo }} !w-auto font-normal">
+                  <option value="semana">semana(s)</option><option value="mes">mês(es)</option><option value="ano">ano(s)</option>
+                </select>
+              </div>
+            </div>
+            <fieldset x-show="unidadeEf() === 'semana'" x-cloak class="space-y-1">
+              <legend class="text-sm text-ink-muted font-medium">Repete nos dias <span class="font-normal">(o dia da data sempre entra)</span></legend>
+              <div class="flex flex-wrap gap-2">
+                {% for i, rotulo in [(0, "Seg"), (1, "Ter"), (2, "Qua"), (3, "Qui"), (4, "Sex"), (5, "Sáb"), (6, "Dom")] %}
+                  <label class="cursor-pointer">
+                    <input type="checkbox" name="dias" value="{{ i }}" :disabled="repetir !== 'fixa' || unidadeEf() !== 'semana'" class="peer sr-only" {{ "checked" if i|string in form.dias }}>
+                    <span class="inline-flex items-center justify-center size-11 rounded-full border border-line text-sm font-medium text-ink-muted peer-checked:bg-primary peer-checked:border-primary peer-checked:text-white peer-focus-visible:ring-4 peer-focus-visible:ring-primary/30 hover:border-primary transition-colors duration-150">{{ rotulo }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </fieldset>
+            <fieldset class="space-y-2 text-sm">
+              <legend class="text-sm text-ink-muted font-medium">Termina</legend>
+              <label class="flex items-center gap-2 min-h-11 cursor-pointer"><input type="radio" name="fim_tipo" value="nunca" x-model="fimTipo" :disabled="repetir !== 'fixa'" class="size-5 accent-[var(--c-primary)] cursor-pointer"> Nunca</label>
+              <label class="flex items-center gap-2 min-h-11 cursor-pointer"><input type="radio" name="fim_tipo" value="data" x-model="fimTipo" :disabled="repetir !== 'fixa'" class="size-5 accent-[var(--c-primary)] cursor-pointer"> Em
+                <input type="date" name="fim_data" value="{{ form.fim_data }}" :disabled="repetir !== 'fixa' || fimTipo !== 'data'" class="{{ campo }} !w-auto font-normal"></label>
+              <label class="flex items-center gap-2 min-h-11 cursor-pointer"><input type="radio" name="fim_tipo" value="vezes" x-model="fimTipo" :disabled="repetir !== 'fixa'" class="size-5 accent-[var(--c-primary)] cursor-pointer"> Após
+                <input name="fim_vezes" value="{{ form.fim_vezes }}" inputmode="numeric" aria-label="Número de ocorrências" :disabled="repetir !== 'fixa' || fimTipo !== 'vezes'" class="{{ campo }} !w-20 text-center font-normal"> ocorrências</label>
+            </fieldset>
+          </div>
+
+          {% if tipo != "transferencia" %}
+            <label class="flex items-center gap-3 min-h-11 cursor-pointer">
+              <i data-lucide="refresh-cw" class="size-5 text-ink-muted shrink-0"></i>
+              <span class="flex-1 text-sm">Repetir
+                <span class="block text-xs text-ink-muted">Lança o mesmo valor por alguns meses (1/N, 2/N…).</span></span>
+              <input type="checkbox" role="switch" class="peer sr-only" :checked="repetir === 'repetida'"
+                     @change="repetir = $event.target.checked ? 'repetida' : 'nao'">
+              <span aria-hidden="true" class="{{ chave }}"></span>
+            </label>
+            {% if tipo in ("despesa", "cartao") %}
+            <label class="flex items-center gap-3 min-h-11 cursor-pointer">
+              <i data-lucide="split" class="size-5 text-ink-muted shrink-0"></i>
+              <span class="flex-1 text-sm">Parcelar compra
+                <span class="block text-xs text-ink-muted">O valor acima é o total; divide em parcelas mensais (1/N, 2/N…).</span></span>
+              <input type="checkbox" role="switch" class="peer sr-only" :checked="repetir === 'parcelada'"
+                     @change="repetir = $event.target.checked ? 'parcelada' : 'nao'">
+              <span aria-hidden="true" class="{{ chave }}"></span>
+            </label>
+            {% endif %}
+            <div x-show="repetir === 'repetida' || repetir === 'parcelada'" x-cloak class="space-y-3 pl-8">
+              <label class="flex items-center gap-2 text-sm">
+                <input name="parcelas" value="{{ form.parcelas }}" inputmode="numeric" aria-label="Quantas vezes" class="{{ campo }} !w-20 text-center">
+                <span x-text="repetir === 'parcelada' ? 'parcelas (o total é dividido), uma por mês' : 'vezes'">vezes</span>
+              </label>
+              <label x-show="repetir === 'repetida'" class="flex items-center gap-2 text-sm">a cada
+                <select name="intervalo" :disabled="repetir !== 'repetida'" aria-label="Intervalo entre as vezes" class="{{ campo }} !w-auto">
+                  {% for n, rotulo in intervalos.items() %}<option value="{{ n }}" {{ "selected" if form.intervalo|string == n|string }}>{{ n }} {{ "mês" if n == 1 else "meses" }}</option>{% endfor %}
+                </select>
+              </label>
+              {% if tipo in ("despesa", "cartao") %}
+                <p role="note" class="rounded-xl bg-warning/10 border border-warning/30 text-warning px-3 py-2 text-sm flex items-start gap-2">
+                  <i data-lucide="clock" class="size-5 shrink-0"></i><span>Regra das 72 h: esperar 3 dias antes de parcelar algo novo.</span>
+                </p>
+              {% endif %}
+            </div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-2">
+      <button type="button" onclick="fecharModal()" class="px-4 h-11 rounded-xl text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Cancelar</button>
+      {% if not edicao %}
+        <button name="continuar" value="1" class="inline-flex items-center gap-2 px-4 h-11 rounded-xl {{ ac.chip }} font-medium hover:opacity-80 transition-opacity duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="copy-plus" class="size-4"></i>Salvar e criar nova</button>
+      {% endif %}
+      <button class="inline-flex items-center gap-2 px-5 h-11 rounded-xl {{ ac.botao }} text-white font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="check" class="size-4"></i>Salvar</button>
+    </div>
+  </form>
+</div>

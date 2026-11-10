@@ -1,0 +1,23 @@
+{% from "objetivos/_macros.html" import barra_meta, icone_meta %}
+{% if objetivos %}
+<section class="bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5" aria-labelledby="titulo-objetivos">
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+    <h2 id="titulo-objetivos" class="font-semibold">Objetivos</h2>
+    <a href="/planejamento#metas" class="text-sm text-primary hover:underline cursor-pointer">Ver mais{% if n_objetivos > objetivos|length %} ({{ n_objetivos }}){% endif %}</a>
+  </div>
+  <ul class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+    {% for o, p in objetivos %}
+      <li>
+        <a href="/planejamento/metas/{{ o.id }}" class="flex items-center gap-3 rounded-xl -m-1 p-1 hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+          {{ icone_meta(o, "size-9", "size-4") }}
+          <div class="flex-1 min-w-0">
+            <div class="flex items-baseline justify-between gap-2 text-sm"><span class="font-medium truncate">{{ o.nome }}</span><span class="tabular-nums text-ink-muted shrink-0">{{ p.pct }}%</span></div>
+            <div class="mt-1">{{ barra_meta(o, p.pct, o.nome) }}</div>
+            <p class="mt-1 text-xs text-ink-muted tabular-nums">{{ p.atual|reais }} de {{ p.alvo|reais }}{% if o.prazo %} · até {{ o.prazo|data_br }}{% endif %}</p>
+          </div>
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}

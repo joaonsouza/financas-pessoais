@@ -1,0 +1,47 @@
+{% from "_seletor_categoria.html" import seletor_categoria with context %}
+{# Edição em massa: cada campo começa em "não alterar"; só o que for escolhido é aplicado. #}
+{% set campo = "w-full h-11 rounded-xl border border-line bg-card px-3 text-ink focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+<div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4 overflow-y-auto">
+  <form hx-post="/lancamentos/editar-lote" hx-target="#modal" @keydown.escape.window="fecharModal()"
+        class="bg-card text-ink rounded-3xl shadow-xl w-full max-w-md p-6 space-y-4 max-h-full overflow-y-auto"
+        role="dialog" aria-modal="true" aria-labelledby="titulo-editar-lote">
+    <div class="flex items-center justify-between">
+      <h2 id="titulo-editar-lote" class="text-lg font-semibold">Editar {{ ids|length }} lançamento{{ "s" if ids|length != 1 }}</h2>
+      <button type="button" aria-label="Fechar" onclick="fecharModal()"
+              class="size-11 -mr-2 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="x" class="size-5"></i></button>
+    </div>
+    {% for i in ids %}<input type="hidden" name="ids" value="{{ i }}">{% endfor %}
+    {% if erro %}
+      <div role="alert" class="rounded-xl bg-expense/10 border border-expense/30 text-expense px-3 py-2 text-sm flex items-start gap-2">
+        <i data-lucide="alert-circle" class="size-5 shrink-0"></i><span>{{ erro }}</span>
+      </div>
+    {% endif %}
+    <p class="text-xs text-ink-muted">Só o que você escolher será alterado. Categoria de tipo diferente do lançamento, ajustes e lançamentos de cartão (na troca de conta) ficam como estão.</p>
+    <div class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Categoria
+      {{ seletor_categoria("categoria_id", "", "todas", vazio=none, topo=[("", "Não alterar")]) }}
+    </div>
+    <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Conta
+      <select name="conta_id" class="{{ campo }} font-normal">
+        <option value="">Não alterar</option>
+        {% for c in contas %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Situação
+      <select name="status" class="{{ campo }} font-normal">
+        <option value="">Não alterar</option><option value="efetivado">Efetivada</option><option value="pendente">Pendente</option>
+      </select>
+    </label>
+    <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Adicionar tags <span class="font-normal">(separadas por vírgula)</span>
+      <input name="tags" class="{{ campo }} font-normal">
+    </label>
+    <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Ignorar nos saldos e totais
+      <select name="ignorar" class="{{ campo }} font-normal">
+        <option value="">Não alterar</option><option value="sim">Ignorar</option><option value="nao">Voltar a contar</option>
+      </select>
+    </label>
+    <div class="flex justify-end gap-2 pt-2">
+      <button type="button" onclick="fecharModal()" class="px-4 h-11 rounded-xl text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Cancelar</button>
+      <button class="inline-flex items-center gap-2 px-4 h-11 rounded-xl bg-primary text-white font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="check" class="size-4"></i>Aplicar</button>
+    </div>
+  </form>
+</div>

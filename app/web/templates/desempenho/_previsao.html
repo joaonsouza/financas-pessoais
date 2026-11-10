@@ -1,0 +1,135 @@
+<section id="previsao" class="bg-card rounded-[20px] border border-line p-5 shadow-[0_4px_6px_rgba(0,0,0,0.04)] space-y-6" aria-labelledby="titulo-previsao">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-2">
+      <span class="size-8 rounded-xl bg-primary-soft text-primary flex items-center justify-center">
+        <i data-lucide="trending-up" class="size-5"></i>
+      </span>
+      <div>
+        <h2 id="titulo-previsao" class="font-semibold text-ink">Forecast & Previsão de Saldo</h2>
+        <p class="text-xs text-ink-muted">Projeção a {{ janela }} meses: compromissos agendados e estimativa de gastos variáveis</p>
+      </div>
+    </div>
+    <div class="text-xs text-ink-muted bg-page px-3 py-1.5 rounded-full border border-line">
+      Variáveis estimadas: <span class="font-semibold text-ink tabular-nums">{{ previsao.media_variaveis_avulsas|reais }}/mês</span> ({{ previsao.base_media }})
+    </div>
+  </div>
+
+  {# Alertas de pior saldo #}
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+    <div class="p-3 rounded-xl bg-page border border-line flex items-center justify-between gap-2">
+      <span class="text-ink-muted">Pior saldo no agendado:</span>
+      <span class="font-semibold tabular-nums {{ 'text-expense' if previsao.pior_saldo_agendado and previsao.pior_saldo_agendado < 0 else 'text-ink' }}">
+        {{ previsao.pior_saldo_agendado|reais if previsao.pior_saldo_agendado is not none else "—" }}
+        {% if previsao.pior_mes_agendado %} ({{ previsao.pior_mes_agendado }}){% endif %}
+      </span>
+    </div>
+    <div class="p-3 rounded-xl bg-page border border-line flex items-center justify-between gap-2">
+      <span class="text-ink-muted">Pior saldo no estimado:</span>
+      <span class="font-semibold tabular-nums {{ 'text-expense' if previsao.pior_saldo_estimado and previsao.pior_saldo_estimado < 0 else 'text-ink' }}">
+        {{ previsao.pior_saldo_estimado|reais if previsao.pior_saldo_estimado is not none else "—" }}
+        {% if previsao.pior_mes_estimado %} ({{ previsao.pior_mes_estimado }}){% endif %}
+      </span>
+    </div>
+  </div>
+
+  {# Gráfico de Previsão Mensal #}
+  <div>
+    <div class="h-72 relative">
+      <canvas id="grafico-previsao-saldo" role="img" aria-label="Projeção de saldo líquido"></canvas>
+    </div>
+    <div class="mt-2 text-[11px] text-ink-muted text-center flex items-center justify-center gap-4">
+      <span class="inline-flex items-center gap-1.5"><span class="w-3 h-0.5 bg-primary inline-block"></span> Realizado</span>
+      <span class="inline-flex items-center gap-1.5"><span class="w-3 h-0.5 border-t-2 border-dashed border-primary inline-block"></span> Agendado (pendentes e faturas)</span>
+      <span class="inline-flex items-center gap-1.5"><span class="w-3 h-0.5 border-t-2 border-dashed border-warning inline-block"></span> Estimado (+ variáveis pela média)</span>
+    </div>
+  </div>
+
+  {# Tabela mês a mês #}
+  <div class="overflow-x-auto">
+    <table class="w-full text-xs text-left">
+      <thead class="text-ink-muted bg-page border-b border-line uppercase tracking-wider font-semibold">
+        <tr>
+          <th class="py-2.5 px-3">Mês</th>
+          <th class="py-2.5 px-3 text-right">Receitas agend.</th>
+          <th class="py-2.5 px-3 text-right">Despesas agend.</th>
+          <th class="py-2.5 px-3 text-right">Variáveis estim.</th>
+          <th class="py-2.5 px-3 text-right">Saldo fim (agend.)</th>
+          <th class="py-2.5 px-3 text-right font-bold">Saldo fim (estim.)</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-line">
+        {% for p in previsao.pontos_mensais %}
+          <tr class="hover:bg-page/50 transition-colors">
+            <td class="py-2 px-3 font-medium">
+              <a href="/lancamentos?mes={{ p.competencia }}" class="hover:text-primary hover:underline">{{ p.rotulo }}</a>
+            </td>
+            <td class="py-2 px-3 text-right tabular-nums text-income">{{ p.receitas_agendadas|reais }}</td>
+            <td class="py-2 px-3 text-right tabular-nums text-expense">{{ p.despesas_agendadas|reais }}</td>
+            <td class="py-2 px-3 text-right tabular-nums text-warning">{{ p.variaveis_estimadas|reais }}</td>
+            <td class="py-2 px-3 text-right tabular-nums {{ 'text-expense font-semibold' if p.saldo_agendado and p.saldo_agendado < 0 else '' }}">
+              {{ p.saldo_agendado|reais if p.saldo_agendado is not none else "—" }}
+            </td>
+            <td class="py-2 px-3 text-right tabular-nums font-semibold {{ 'text-expense' if p.saldo_estimado and p.saldo_estimado < 0 else 'text-ink' }}">
+              {{ p.saldo_estimado|reais if p.saldo_estimado is not none else "—" }}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# Grid de apoio: Curva diária de 30 dias + Compromissos #}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-4 border-t border-line">
+    {# Curva diária 30 dias #}
+    <div class="p-4 rounded-xl bg-page/70 border border-line flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold text-ink">Curva Diária de Saldo (Próximos 30 dias)</span>
+          {% if previsao.menor_saldo_30_dias %}
+            <span class="text-[11px] tabular-nums font-medium {{ 'text-expense' if previsao.menor_saldo_30_dias.saldo < 0 else 'text-ink-muted' }}">
+              Mínimo: {{ previsao.menor_saldo_30_dias.saldo|reais }} em {{ previsao.menor_saldo_30_dias.rotulo }}
+            </span>
+          {% endif %}
+        </div>
+        <div class="h-44 relative">
+          <canvas id="grafico-curva-30" role="img" aria-label="Curva diária de saldo"></canvas>
+        </div>
+      </div>
+    </div>
+
+    {# Compromissos #}
+    <div class="p-4 rounded-xl bg-page/70 border border-line flex flex-col justify-between">
+      <div class="space-y-3">
+        <span class="text-xs font-semibold text-ink block">Próximos compromissos & Términos</span>
+        
+        {% if previsao.proximos_compromissos %}
+          <div class="space-y-1">
+            <span class="text-[11px] font-semibold text-ink-muted uppercase tracking-wider block">A vencer nos próximos 30 dias:</span>
+            <ul class="text-xs divide-y divide-line/60">
+              {% for c in previsao.proximos_compromissos %}
+                <li class="py-1 flex items-center justify-between gap-2">
+                  <span class="truncate text-ink-muted">{{ c.data|data_br }} · {{ c.descricao }}</span>
+                  <span class="font-medium tabular-nums text-expense shrink-0">{{ c.valor|reais }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        {% if previsao.compromissos_terminando %}
+          <div class="space-y-1 pt-2 border-t border-line/60">
+            <span class="text-[11px] font-semibold text-income uppercase tracking-wider block">Parcelas/Recorrências encerrando no horizonte:</span>
+            <ul class="text-xs divide-y divide-line/60">
+              {% for t in previsao.compromissos_terminando[:4] %}
+                <li class="py-1 flex items-center justify-between gap-2">
+                  <span class="truncate text-ink-muted">{{ t.competencia }} · {{ t.descricao }}</span>
+                  <span class="font-medium tabular-nums text-income shrink-0">+{{ t.valor_mensal|reais }}/mês</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>

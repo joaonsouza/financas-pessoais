@@ -1,0 +1,322 @@
+{% set campo = "w-full h-11 rounded-xl border border-line bg-card px-3 text-ink focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set rotulo = "text-sm font-medium text-ink-muted" %}
+{% set chip = "inline-flex items-center px-3 h-11 rounded-xl bg-primary-soft text-primary text-sm font-medium hover:opacity-80 transition-opacity duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set ativo_inicial = form.ativo_id if form.ativo_id else ("" if ativos else "novo") %}
+<div data-recarregar="1" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4 overflow-y-auto">
+  <form hx-post="{{ acao }}" hx-target="#modal"
+        x-data='{
+          ativo: {{ ativo_inicial|tojson }}, classeNova: {{ (form.classe or "acao")|tojson }}, tipo: {{ form.tipo|tojson }},
+          codigo: {{ (form.codigo or "")|tojson }}, simbolo: {{ (form.simbolo or "")|tojson }}, simboloEditado: {{ "true" if form.simbolo else "false" }},
+          mapa: {{ classe_do_ativo|tojson }}, tipos: {{ tipos_por_classe|tojson }},
+          rotulos: {{ rotulos_tipo|tojson }},
+          caixinhas: {{ caixinhas|tojson }}, sugestoes: {{ sugestoes|tojson }},
+          conta: {{ form.conta_id|tojson }}, cxConta: {{ form.caixinha_conta_id|tojson }},
+          custodia: {{ form.custodia_conta_id|tojson }}, cxCustodia: {{ form.custodia_caixinha_id|tojson }},
+          carteira: {{ (form.carteira_id or "")|tojson }}, carteiraEditada: {{ "true" if form.carteira_id else "false" }},
+          carteiraPorConta: {{ carteira_por_conta|tojson }},
+          soCadastrar: {{ "true" if form.so_cadastrar else "false" }},
+          /* venda/resgate: quando o dinheiro cai na conta; sugerida (D+2 úteis na B3, senão o dia) até ser editada */
+          dataLiq: {{ (form.data_liquidacao or "")|tojson }}, liqEditada: {{ "true" if form.data_liquidacao else "false" }},
+          sugerirLiquidacao() {
+            if (this.liqEditada || !["venda", "resgate"].includes(this.tipo) || !this.$refs.data || !this.$refs.data.value) return;
+            const d = new Date(this.$refs.data.value + "T12:00:00");
+            let n = this.tipo === "venda" && ["acao", "fii", "etf"].includes(this.classe) ? 2 : 0;
+            while (n > 0) { d.setDate(d.getDate() + 1); if (d.getDay() % 6 !== 0) n--; }
+            this.dataLiq = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+          },
+          /* alocação do ativo novo: sugerida pela classe e pelo código (como `alocacao_padrao`) até ser escolhida */
+          alocacao: {{ (form.alocacao or "acoes")|tojson }}, alocacaoEditada: {{ "true" if form.alocacao else "false" }},
+          etfsAlocacao: {{ etfs_por_alocacao|tojson }},
+          alocacaoPadrao() {
+            const c = this.classeNova;
+            if (c === "renda_fixa" || c === "cripto") return c;
+            const t = this.codigo.trim().toUpperCase().replace(/\.SA$/, "");
+            if (c === "etf") for (const [k, lista] of Object.entries(this.etfsAlocacao)) if (lista.includes(t)) return k;
+            return "acoes";
+          },
+          get semCompra() { return this.ativo !== "" && this.soCadastrar; },
+          sugerirCarteira() { if (!this.carteiraEditada) this.carteira = String(this.carteiraPorConta[this.custodia] || ""); },
+          sugerirConta() {
+            const s = this.sugestoes[this.ativo];
+            if (!s) return;
+            this.conta = s.conta_id; this.custodia = s.custodia_conta_id;
+            if (!this.carteiraEditada) this.carteira = s.carteira_id || String(this.carteiraPorConta[s.custodia_conta_id] || "");
+            this.$nextTick(() => { this.cxConta = s.caixinha_conta_id; this.cxCustodia = s.custodia_caixinha_id; });
+          },
+          get classe() { return this.ativo === "novo" ? this.classeNova : (this.mapa[this.ativo] || ""); },
+          /* Tesouro Direto: título escolhido (novo) ou já cadastrado; taxa e preço do dia da ordem (útil anterior) */
+          tesouroAtivos: {{ tesouro_dos_ativos|tojson }}, titulos: [], tituloTd: "",
+          indexador: {{ (form.indexador or "cdi")|tojson }}, taxa: {{ (form.taxa or "")|tojson }},
+          vencimento: {{ (form.vencimento or "")|tojson }}, taxaOp: {{ (form.taxa_op or "")|tojson }},
+          preco: {{ (form.preco or "")|tojson }}, avisoTaxa: "",
+          get tesouro() {
+            if (this.classe !== "renda_fixa") return null;
+            if (this.ativo !== "novo") return this.tesouroAtivos[this.ativo] || null;
+            const [titulo, vencimento] = this.tituloTd.split("|");
+            return titulo ? { titulo, vencimento, por_titulos: true } : null;
+          },
+          get porTitulos() { return !!(this.tesouro && this.tesouro.por_titulos); },
+          async carregarTitulos() {
+            if (this.titulos.length) return;
+            try { this.titulos = await (await fetch("/investimentos/tesouro/titulos")).json(); } catch (e) { this.titulos = []; }
+          },
+          escolherTitulo() {
+            const t = this.titulos.find((x) => x.titulo + "|" + x.vencimento === this.tituloTd);
+            if (!t) return;
+            this.codigo = t.nome; this.indexador = t.indexador; this.vencimento = t.vencimento;
+            this.buscarTaxa();
+          },
+          async buscarTaxa() {
+            const t = this.tesouro;
+            this.avisoTaxa = "";
+            if (!t || !["aplicacao", "resgate"].includes(this.tipo) || !this.$refs.data.value) return;
+            const q = new URLSearchParams({ titulo: t.titulo, vencimento: t.vencimento, data: this.$refs.data.value, anterior: "1" });
+            try {
+              const r = await fetch("/investimentos/tesouro/taxa?" + q);
+              if (!r.ok) { this.avisoTaxa = "Sem dados do Tesouro para essa data."; return; }
+              const j = await r.json();
+              const pu = this.tipo === "aplicacao" ? j.pu : j.pu_venda;
+              if (this.tipo === "aplicacao") { if (this.ativo === "novo") this.taxa = j.taxa; else this.taxaOp = j.taxa; }
+              const brl = (c) => (c / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+              if (this.porTitulos && pu && !this.preco) this.preco = brl(pu);
+              this.avisoTaxa = "Tesouro em " + j.data.split("-").reverse().join("/") + " (dia da ordem): taxa " + j.taxa +
+                "%, título a R$ " + brl(pu || j.pu) + ". Confira com a nota e ajuste se preciso.";
+            } catch (e) { this.avisoTaxa = ""; }
+          },
+          sugerir() {
+            if (this.simboloEditado) return;
+            const c = this.codigo.trim().toUpperCase();
+            if (["acao", "fii", "etf"].includes(this.classe)) this.simbolo = c ? (c.endsWith(".SA") ? c : c + ".SA") : "";
+            else if (this.classe === "cripto") this.simbolo = c ? (c.includes("-") ? c : c + "-USD") : "";
+            else this.simbolo = this.classe === "exterior" ? c : "";
+          }
+        }'
+        x-effect="if (classe && !tipos[classe].includes(tipo)) tipo = tipos[classe][0]"
+        x-init="$watch('ativo', () => { buscarTaxa(); sugerirLiquidacao() }); $watch('tipo', () => { buscarTaxa(); sugerirLiquidacao() }); $nextTick(() => sugerirLiquidacao()); if (ativo === 'novo') carregarTitulos(); if (!preco && !taxaOp) buscarTaxa()"
+        @keydown.escape.window="fecharModal()"
+        class="bg-card text-ink rounded-3xl shadow-xl w-full max-w-lg lg:max-w-5xl p-6 space-y-4 max-h-full overflow-y-auto">
+    <div class="flex items-center justify-between">
+      <h2 class="text-lg font-semibold text-primary">{{ titulo }}</h2>
+      <button type="button" aria-label="Fechar" onclick="fecharModal()"
+              class="size-11 -mr-2 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+        <i data-lucide="x" class="size-5"></i>
+      </button>
+    </div>
+
+    {% if salvo %}
+      <div role="status" class="rounded-xl bg-income/10 border border-income/30 text-income px-3 py-2 text-sm flex items-center gap-2">
+        <i data-lucide="check-circle" class="size-5 shrink-0"></i><span>Operação salva</span>
+      </div>
+    {% endif %}
+    {% if erro %}
+      <div role="alert" class="rounded-xl bg-expense/10 border border-expense/30 text-expense px-3 py-2 text-sm flex items-start gap-2">
+        <i data-lucide="alert-circle" class="size-5 shrink-0"></i><span>{{ erro }}</span>
+      </div>
+    {% endif %}
+
+    {# telas largas: operação à esquerda, pagamento e observação à direita #}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4">
+    <div class="space-y-4 min-w-0">
+    {% if edicao %}
+      <input type="hidden" name="ativo_id" value="{{ form.ativo_id }}">
+    {% else %}
+      <label class="block">
+        <span class="{{ rotulo }}">Ativo</span>
+        <select name="ativo_id" x-model="ativo" @change="sugerirConta(); if (ativo === 'novo') carregarTitulos()" class="{{ campo }}">
+          {% if ativos %}<option value="">Escolha…</option>{% endif %}
+          {% for a in ativos %}<option value="{{ a.id }}">{{ a.codigo }}{% if a.nome %} · {{ a.nome }}{% endif %} ({{ rotulos_classe[a.classe] }})</option>{% endfor %}
+          <option value="novo">Novo ativo…</option>
+        </select>
+      </label>
+
+      <div x-show="ativo === 'novo'" x-cloak class="space-y-3 rounded-2xl border border-line p-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="block">
+            <span class="{{ rotulo }}">Classe</span>
+            <select name="classe" x-model="classeNova" @change="sugerir()" class="{{ campo }}">
+              {% for c in classes %}<option value="{{ c }}">{{ rotulos_classe[c] }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="block">
+            <span class="{{ rotulo }}" x-text="classe === 'renda_fixa' ? 'Título (ex.: CDB Banco X 2028)' : 'Código (ex.: PETR4)'">Código</span>
+            <input name="codigo" x-model="codigo" @input="sugerir()" autocomplete="off" class="{{ campo }}">
+          </label>
+        </div>
+        <label class="block">
+          <span class="{{ rotulo }}">Alocação (em qual bloco da carteira ele entra)</span>
+          <select name="alocacao" x-model="alocacao" x-effect="if (!alocacaoEditada) alocacao = alocacaoPadrao()"
+                  @change="alocacaoEditada = true" class="{{ campo }}">
+            {% for k, r in alocacoes.items() %}<option value="{{ k }}">{{ r }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="block">
+          <span class="{{ rotulo }}">Nome (opcional)</span>
+          <input name="nome" value="{{ form.nome }}" class="{{ campo }}">
+        </label>
+        <label class="block" x-show="classe !== 'renda_fixa'">
+          <span class="{{ rotulo }}">Símbolo da cotação</span>
+          <input name="simbolo" x-model="simbolo" @input="simboloEditado = true" autocomplete="off" class="{{ campo }}">
+        </label>
+        <label class="block" x-show="classe === 'renda_fixa'">
+          <span class="{{ rotulo }}">Título do Tesouro Direto</span>
+          <select x-model="tituloTd" @change="escolherTitulo()" @focus="carregarTitulos()" class="{{ campo }}">
+            <option value="">Outro (CDB, LCI, LCA…)</option>
+            <template x-for="t in titulos" :key="t.titulo + t.vencimento"><option :value="t.titulo + '|' + t.vencimento" x-text="t.nome"></option></template>
+          </select>
+        </label>
+        <div x-show="classe === 'renda_fixa'" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label class="block">
+            <span class="{{ rotulo }}">Indexador</span>
+            <select name="indexador" x-model="indexador" class="{{ campo }}">
+              {% for k, r in rotulos_indexador.items() %}<option value="{{ k }}">{{ r }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="block">
+            <span class="{{ rotulo }}">Taxa</span>
+            <input name="taxa" x-model="taxa" inputmode="decimal" placeholder="110" class="{{ campo }}">
+          </label>
+          <label class="block">
+            <span class="{{ rotulo }}">Vencimento</span>
+            <input type="date" name="vencimento" x-model="vencimento" class="{{ campo }}">
+          </label>
+        </div>
+      </div>
+      {# vale para ativo novo ou já cadastrado: o mesmo ativo pode ser desejado em várias carteiras #}
+      <label x-show="ativo !== ''" class="flex items-start gap-2 text-sm cursor-pointer">
+        <input type="checkbox" name="so_cadastrar" value="1" x-model="soCadastrar" class="size-4 mt-0.5 accent-primary">
+        <span x-text="ativo === 'novo' ? 'Ainda não comprei: só cadastrar o ativo, para dar meta e entrar no rebalanceamento' : 'Ainda não comprei: só listar o ativo na carteira escolhida, para dar meta e entrar no rebalanceamento'">Ainda não comprei</span>
+      </label>
+    {% endif %}
+
+    <div x-show="!semCompra" class="space-y-4">
+    <div>
+      <span class="{{ rotulo }}">Tipo</span>
+      <input type="hidden" name="tipo" :value="tipo">
+      <div class="flex flex-wrap gap-2 mt-1" role="group" aria-label="Tipo da operação">
+        <template x-for="t in (tipos[classe] || [])" :key="t">
+          <button type="button" @click="tipo = t" :aria-pressed="tipo === t"
+                  :class="tipo === t ? 'bg-primary text-white' : 'bg-page text-ink-muted hover:text-ink'"
+                  class="px-4 h-11 rounded-xl text-sm font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+                  x-text="rotulos[t]"></button>
+        </template>
+        <span x-show="!classe" class="text-sm text-ink-muted self-center">Escolha o ativo para ver os tipos.</span>
+      </div>
+    </div>
+
+    <div>
+      <span class="{{ rotulo }}">Data</span>
+      <div class="flex flex-wrap gap-2 items-center">
+        <input type="date" name="data" x-ref="data" value="{{ form.data }}" :required="!semCompra" @change="buscarTaxa(); sugerirLiquidacao()" class="{{ campo }} !w-auto">
+        <button type="button" @click="$refs.data.value = '{{ hoje.isoformat() }}'; buscarTaxa(); sugerirLiquidacao()" class="{{ chip }}">Hoje</button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <input type="hidden" name="por_titulos" :value="porTitulos ? '1' : ''">
+      <label class="block" x-show="classe !== 'renda_fixa' || porTitulos">
+        <span class="{{ rotulo }}" x-text="porTitulos ? 'Títulos' : (tipo === 'ajuste_posicao' ? 'Quantidade atual' : (tipo === 'rendimento' ? 'Saldo total agora (na corretora)' : 'Quantidade'))">Quantidade</span>
+        <input name="quantidade" value="{{ form.quantidade }}" inputmode="decimal" autocomplete="off" placeholder="0" class="{{ campo }} tabular-nums">
+      </label>
+      <label class="block" x-show="tipo !== 'rendimento'">
+        <span class="{{ rotulo }}" x-text="porTitulos ? 'Preço do título (R$)' : (classe === 'renda_fixa' ? 'Valor (R$)' : (tipo === 'ajuste_posicao' ? 'Preço médio' : 'Preço unitário') + (classe === 'exterior' ? ' (US$)' : ' (R$)'))">Preço</span>
+        <input data-mascara="reais" name="preco" x-model="preco" inputmode="decimal" autocomplete="off" placeholder="0,00" class="{{ campo }} tabular-nums">
+      </label>
+      <label class="block" x-show="classe === 'renda_fixa' && ativo !== 'novo' && tipo === 'aplicacao'" x-cloak>
+        <span class="{{ rotulo }}">Taxa desta aplicação</span>
+        <input name="taxa_op" x-model="taxaOp" inputmode="decimal" autocomplete="off" placeholder="a do título" class="{{ campo }} tabular-nums">
+      </label>
+      <label class="block" x-show="classe === 'exterior' && tipo !== 'rendimento'" x-cloak>
+        <span class="{{ rotulo }}">Câmbio (R$ por US$)</span>
+        <input name="cambio" value="{{ form.cambio }}" inputmode="decimal" autocomplete="off" placeholder="5,00" class="{{ campo }} tabular-nums">
+      </label>
+      <label class="block" x-show="classe !== 'renda_fixa' && !['ajuste_posicao', 'rendimento'].includes(tipo)">
+        <span class="{{ rotulo }}">Taxas (R$)</span>
+        <input data-mascara="reais" name="taxas" value="{{ form.taxas }}" inputmode="decimal" autocomplete="off" placeholder="0,00" class="{{ campo }} tabular-nums">
+      </label>
+      {# imposto retido na fonte (ex.: IR no resgate do Tesouro/CDB): o líquido é o que cai na conta e o que vale no lucro #}
+      <label class="block" x-show="['venda', 'resgate'].includes(tipo)" x-cloak>
+        <span class="{{ rotulo }}">Valor líquido recebido (R$)</span>
+        <input data-mascara="reais" name="valor_liquido" value="{{ form.valor_liquido }}" inputmode="decimal" autocomplete="off" placeholder="opcional" title="Preencha se houve imposto retido: é o valor que de fato caiu na conta" class="{{ campo }} tabular-nums">
+      </label>
+    </div>
+    <p x-show="avisoTaxa" x-cloak class="text-xs text-ink-muted" x-text="avisoTaxa"></p>
+    <p x-show="tipo === 'ajuste_posicao'" x-cloak class="text-xs text-ink-muted">O ajuste define a posição atual (quantidade e preço médio) sem histórico de compras.</p>
+    <p x-show="tipo === 'rendimento'" x-cloak class="text-xs text-ink-muted">Rendimento creditado pela corretora (ex.: USDC): informe o saldo total que a corretora mostra; o que passar da posição atual entra sem custo, como lucro, e não movimenta conta.</p>
+    </div>
+
+    </div>
+    <div class="space-y-4 min-w-0">
+    {# de onde sai (ou para onde volta) o dinheiro: transferência entre a conta e a conta de investimento #}
+    {% set campo_pg = campo ~ " disabled:opacity-50 disabled:cursor-not-allowed" %}
+    {# sem compra, só a carteira em que o ativo aparece #}
+    <fieldset x-show="!semCompra || {{ 'true' if carteiras_lista|length > 1 else 'false' }}" class="rounded-2xl border border-line p-4 space-y-3">
+      <legend class="px-1 {{ rotulo }}" x-text="semCompra ? 'Em qual carteira aparece' : 'Onde fica'">Onde fica</legend>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="block" x-show="!semCompra">
+          <span class="{{ rotulo }}">Conta de investimento</span>
+          <select name="custodia_conta_id" x-model="custodia" @change="cxCustodia = ''; sugerirCarteira()" class="{{ campo_pg }}">
+            <option value="">Não informado</option>
+            {% for c in contas_invest %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="block" x-show="!semCompra">
+          <span class="{{ rotulo }}">Caixinha</span>
+          <select name="custodia_caixinha_id" x-model="cxCustodia" :disabled="!(caixinhas[custodia] || []).length" class="{{ campo_pg }}">
+            <option value="" x-text="(caixinhas[custodia] || []).length ? 'Livre' : '—'">—</option>
+            <template x-for="k in (caixinhas[custodia] || [])" :key="k.id"><option :value="String(k.id)" x-text="k.nome" :selected="String(k.id) === String(cxCustodia)"></option></template>
+          </select>
+        </label>
+        {% if carteiras_lista|length > 1 %}
+        <label class="block sm:col-span-2">
+          <span class="{{ rotulo }}">Carteira</span>
+          <select name="carteira_id" x-model="carteira" @change="carteiraEditada = true" class="{{ campo_pg }}">
+            {% for c in carteiras_lista %}<option value="{{ '' if c.padrao else c.id }}">{{ c.nome }}</option>{% endfor %}
+          </select>
+        </label>
+        {% else %}
+        <input type="hidden" name="carteira_id" value="">
+        {% endif %}
+      </div>
+    </fieldset>
+    <fieldset x-show="!semCompra" :disabled="['ajuste_posicao', 'rendimento'].includes(tipo)" class="rounded-2xl border border-line p-4 space-y-3 disabled:opacity-60">
+      <legend class="px-1 {{ rotulo }}" x-text="['venda', 'resgate'].includes(tipo) ? 'Recebido em' : 'Pago com'">Pago com</legend>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="block">
+          <span class="{{ rotulo }}">Conta</span>
+          <select name="conta_id" x-model="conta" @change="cxConta = ''" class="{{ campo_pg }}">
+            <option value="">Não movimentar</option>
+            {% for c in contas_pagam %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="block">
+          <span class="{{ rotulo }}">Caixinha</span>
+          <select name="caixinha_conta_id" x-model="cxConta" :disabled="!(caixinhas[conta] || []).length" class="{{ campo_pg }}">
+            <option value="" x-text="(caixinhas[conta] || []).length ? 'Livre' : '—'">—</option>
+            <template x-for="k in (caixinhas[conta] || [])" :key="k.id"><option :value="String(k.id)" x-text="k.nome" :selected="String(k.id) === String(cxConta)"></option></template>
+          </select>
+        </label>
+        <label class="block sm:col-span-2" x-show="['venda', 'resgate'].includes(tipo)" x-cloak>
+          <span class="{{ rotulo }}">Cai na conta em</span>
+          <input type="date" name="data_liquidacao" value="{{ form.data_liquidacao }}" x-model="dataLiq" @change="liqEditada = true" class="{{ campo_pg }} !w-auto">
+        </label>
+      </div>
+      <p class="text-xs text-ink-muted" x-text="tipo === 'ajuste_posicao' ? 'Ajuste de posição não movimenta conta.' : tipo === 'rendimento' ? 'Rendimento não movimenta conta.' : ['venda', 'resgate'].includes(tipo) ? 'O lançamento na conta fica pendente até a data em que cai. Na B3 a sugestão é D+2 úteis (sem feriados: ajuste se cair num).' : 'Vira transferência entre esta conta e onde o investimento fica (não é gasto). Editar ou excluir a operação atualiza a transferência.'">&nbsp;</p>
+    </fieldset>
+
+    <label class="block" x-show="!semCompra">
+      <span class="{{ rotulo }}">Observação</span>
+      <input name="observacao" value="{{ form.observacao }}" maxlength="200" class="{{ campo }}">
+    </label>
+
+    </div>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-2">
+      <button type="button" onclick="fecharModal()" class="px-4 h-11 rounded-xl text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Cancelar</button>
+      {% if not edicao %}
+        <button name="continuar" value="1" class="inline-flex items-center gap-2 px-4 h-11 rounded-xl bg-primary-soft text-primary font-medium hover:opacity-80 transition-opacity duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="copy-plus" class="size-4"></i>Salvar e criar nova</button>
+      {% endif %}
+      <button class="inline-flex items-center gap-2 px-5 h-11 rounded-xl bg-primary hover:bg-primary-strong text-white font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="check" class="size-4"></i>Salvar</button>
+    </div>
+  </form>
+</div>

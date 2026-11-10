@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block titulo %}Rebalancear{% endblock %}
+{% block cabecalho %}Rebalancear por aporte{% endblock %}
+{% block conteudo %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink tabular-nums focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+
+<a href="/investimentos" class="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink mb-4 min-h-11 cursor-pointer"><i data-lucide="chevron-left" class="size-4"></i>Investimentos</a>
+
+<form method="get" action="/investimentos/rebalancear" class="{{ cartao_css }} p-5 flex flex-wrap items-end gap-3 mb-4">
+  <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Aporte (R$)
+    <input data-mascara="reais" name="aporte" value="{{ aporte }}" inputmode="decimal" placeholder="1.000,00" autofocus class="{{ campo }}">
+  </label>
+  {% if carteiras|length > 1 %}
+  <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Carteira
+    <select name="carteira" class="{{ campo }} cursor-pointer">
+      <option value="">Consolidada</option>
+      {% for c in carteiras %}<option value="{{ c.id }}"{% if carteira_sel and carteira_sel.id == c.id %} selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Classe
+    <select name="classe" class="{{ campo }} cursor-pointer">
+      <option value="">Todas (global)</option>
+      {% for c in carteira.classes %}<option value="{{ c.classe }}"{% if classe_sel == c.classe %} selected{% endif %}>{{ alocacoes[c.classe] }}</option>{% endfor %}
+    </select>
+  </label>
+  {% if tem_oportunidade %}
+  <label class="flex items-center gap-2 h-11 text-sm cursor-pointer">
+    <input type="checkbox" name="usar_oportunidade" value="1"{% if usar_oportunidade %} checked{% endif %} class="size-4 accent-primary">
+    <span>Usar o saldo da reserva de oportunidade (<span class="tabular-nums">{{ carteira.oportunidade_saldo|reais }}</span>)</span>
+  </label>
+  {% endif %}
+  <button class="{{ botao }}"><i data-lucide="scale" class="size-4"></i>Sugerir compras</button>
+  <span class="text-sm text-ink-muted">Patrimônio atual: <span class="tabular-nums">{{ carteira.patrimonio|reais }}</span></span>
+</form>
+
+{% if erro %}
+  <div role="alert" class="mb-4 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+
+{% if valor is not none %}
+{% if classe_sel %}<p class="mb-3 text-sm text-ink-muted">Aporte inteiro em <span class="font-medium text-ink">{{ alocacoes[classe_sel] }}</span>, dividido entre os ativos dela abaixo da meta.</p>{% endif %}
+<section class="{{ cartao_css }} overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm min-w-[560px]">
+      <thead class="text-xs text-ink-muted">
+        <tr class="border-b border-line">
+          <th scope="col" class="text-left font-medium px-5 py-2">Ativo</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Atual</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">% Ideal</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Comprar</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Valor</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Falta antes → depois</th>
+          <th scope="col" class="px-5 py-2"><span class="sr-only">Efetivar</span></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-line">
+        {% for sg in sugestoes %}
+          {% set l = linhas[sg.ativo.id] %}
+          <tr>
+            <td class="px-5 py-3"><a href="/investimentos/ativos/{{ sg.ativo.id }}" class="font-medium text-primary hover:underline cursor-pointer">{{ sg.ativo.codigo }}</a><span class="block text-xs text-ink-muted">{{ rotulos_classe[sg.ativo.classe] }}</span></td>
+            <td class="px-3 py-3 text-right tabular-nums">{{ l.pct_carteira|pct(1) }}</td>
+            <td class="px-3 py-3 text-right tabular-nums text-ink-muted">{{ l.ideal_pct|pct(1) }}</td>
+            <td class="px-3 py-3 text-right tabular-nums">{% if sg.quantidade is not none %}{{ sg.quantidade|qtd }}{% elif sg.ativo.classe == "renda_fixa" %}aplicar{% else %}sem cotação{% endif %}</td>
+            <td class="px-3 py-3 text-right tabular-nums font-medium">{{ sg.valor|reais }}</td>
+            {% set pa = por_ativo.get(sg.ativo.id) %}
+            <td class="px-3 py-3 text-right tabular-nums text-ink-muted whitespace-nowrap">{% if pa %}{{ pa.falta_antes|reais }} → {{ [pa.falta_depois, 0]|max|reais }}{% endif %}</td>
+            <td class="px-5 py-2 text-right">
+              <button type="button" hx-get="{{ efetivar[sg.ativo.id] }}" hx-target="#modal"
+                      aria-label="Efetivar a compra de {{ sg.ativo.codigo }}"
+                      class="inline-flex items-center gap-1.5 bg-primary-soft text-primary rounded-xl px-3 h-9 text-sm font-medium hover:opacity-80 transition-opacity duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="check" class="size-4"></i>Efetivar</button>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="7" class="px-5 py-4 text-ink-muted">Nenhum ativo abaixo da meta. Confira as metas em <a href="/investimentos#meus-ativos" class="text-primary hover:underline">Meus ativos</a>.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if sugestoes %}
+      <tfoot class="border-t border-line">
+        <tr><td colspan="4" class="px-5 py-3 text-ink-muted">{% if plano %}Sobra (fica na reserva de oportunidade){% else %}Sobra do aporte (fica em caixa){% endif %}</td><td class="px-3 py-3 text-right tabular-nums">{{ sobra|reais }}</td><td></td><td></td></tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</section>
+{% if antes_depois %}
+<section class="{{ cartao_css }} mt-4 overflow-hidden" aria-labelledby="titulo-antes-depois">
+  <div class="px-5 pt-4 pb-2">
+    <h2 id="titulo-antes-depois" class="font-semibold">Carteira antes → depois das compras</h2>
+    <p class="text-xs text-ink-muted">A falta é medida contra o total com o aporte e recalculada a cada cota. Quem está acima da meta fica de fora; o que sobra não entra na alocação.</p>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm min-w-[720px]">
+      <thead class="text-xs text-ink-muted">
+        <tr class="border-b border-line">
+          <th scope="col" class="text-left font-medium px-5 py-2">Classe / ativo</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Antes</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Depois</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Meta</th>
+          <th scope="col" class="text-right font-medium px-5 py-2">Falta antes → depois</th>
+        </tr>
+      </thead>
+      {% for c in antes_depois %}
+      <tbody x-data="{ aberto: {{ 'false' if c.fora else 'true' }} }" class="border-b border-line last:border-0">
+        <tr class="{{ 'text-ink-muted' if c.fora }}">
+          <td class="px-5 py-3">
+            <button type="button" @click="aberto = !aberto" :aria-expanded="aberto" class="inline-flex items-center gap-2 font-medium cursor-pointer rounded focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+              <i data-lucide="chevron-down" class="size-4 text-ink-muted transition-transform duration-150" :class="aberto ? '' : '-rotate-90'"></i>
+              <span class="size-2.5 rounded-full" style="background: {{ cores_classe[c.classe] }}"></span>{{ alocacoes[c.classe] }}
+            </button>
+          </td>
+          <td class="px-3 py-3 text-right tabular-nums whitespace-nowrap">{{ c.pct_antes|pct(1) }} <span class="relative inline-block h-2 w-20 rounded-full bg-line align-middle" aria-hidden="true"><span class="absolute inset-y-0 left-0 rounded-full" style="width: {{ [c.pct_antes, 100]|min|round(1) }}%; background: {{ cores_classe[c.classe] }}"></span>{% if c.meta_pct %}<span class="absolute -top-1 h-4 w-0.5 rounded bg-ink" style="left: calc({{ [c.meta_pct, 100]|min|round(1) }}% - 1px)"></span>{% endif %}</span></td>
+          <td class="px-3 py-3 text-right tabular-nums whitespace-nowrap font-medium">{{ c.pct_depois|pct(1) }} <span class="relative inline-block h-2 w-20 rounded-full bg-line align-middle" aria-hidden="true"><span class="absolute inset-y-0 left-0 rounded-full" style="width: {{ [c.pct_depois, 100]|min|round(1) }}%; background: {{ cores_classe[c.classe] }}"></span>{% if c.meta_pct %}<span class="absolute -top-1 h-4 w-0.5 rounded bg-ink" style="left: calc({{ [c.meta_pct, 100]|min|round(1) }}% - 1px)"></span>{% endif %}</span></td>
+          <td class="px-3 py-3 text-right tabular-nums">{{ c.meta_pct|pct(1) }}</td>
+          <td class="px-5 py-3 text-right tabular-nums whitespace-nowrap">
+            {% if c.fora %}<span class="text-xs">acima da meta (fora)</span>
+            {% else %}{{ c.falta_antes|reais }} → <span class="font-medium {{ 'text-income' if c.recebeu else '' }}">{{ [c.falta_depois, 0]|max|reais }}</span>{% if c.recebeu %}<span class="block text-xs text-ink-muted">recebeu {{ c.recebeu|reais }}</span>{% endif %}{% endif %}
+          </td>
+        </tr>
+        {% for a in c.ativos %}
+        <tr x-show="aberto" x-cloak class="text-xs {{ 'text-ink-muted' if a.fora }}">
+          <td class="pl-14 pr-3 py-2">{{ a.ativo.codigo }}{% if a.fora %} · fora{% endif %}</td>
+          <td class="px-3 py-2 text-right tabular-nums">{{ a.pct_antes|pct(1) }} na classe</td>
+          <td class="px-3 py-2 text-right tabular-nums">{{ a.pct_depois|pct(1) }} na classe</td>
+          <td class="px-3 py-2 text-right tabular-nums">{{ a.meta_pct|pct(1) }}</td>
+          <td class="px-5 py-2 text-right tabular-nums">{% if a.fora %}acima da meta{% else %}{{ a.falta_antes|reais }} → {{ [a.falta_depois, 0]|max|reais }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% endfor %}
+    </table>
+  </div>
+</section>
+{% endif %}
+{% if plano %}
+<section class="{{ cartao_css }} p-5 mt-4 text-sm space-y-1" aria-label="Reserva de oportunidade">
+  <h2 class="font-semibold mb-2 flex items-center gap-2"><i data-lucide="piggy-bank" class="size-4 text-primary"></i>Reserva de oportunidade</h2>
+  <p class="tabular-nums">Disponível: {{ valor|reais }}{% if usar_oportunidade %} + {{ carteira.oportunidade_saldo|reais }} da reserva{% endif %} = <span class="font-medium">{{ plano.disponivel|reais }}</span></p>
+  <p class="tabular-nums">Compras sugeridas: {{ plano.comprado|reais }} · fica na reserva: <span class="font-medium">{{ plano.fica|reais }}</span></p>
+  {% if plano.resgatar %}<p class="font-medium text-primary tabular-nums">Resgate {{ plano.resgatar|reais }} da reserva de oportunidade para as compras.</p>
+  {% elif plano.aplicar %}<p class="font-medium text-primary tabular-nums">Aplique {{ plano.aplicar|reais }} na reserva de oportunidade (a sobra que não fecha uma cota).</p>
+  {% else %}<p class="text-ink-muted">A reserva de oportunidade fica como está.</p>{% endif %}
+</section>
+{% endif %}
+<p class="text-xs text-ink-muted mt-3">Regra: compra cota a cota, sempre na alocação com mais falta para a meta (ideal × (patrimônio + aporte) − atual) e, dentro dela, no ativo com mais falta. Se a cota da prioritária não couber no que resta, tenta a próxima alocação com falta, para aproveitar o máximo do saldo; o que não compra nenhuma cota fica na reserva de oportunidade. Renda fixa e frações (cripto e exterior, 8 casas) levam o valor quebrado.</p>
+{% endif %}
+{% endblock %}

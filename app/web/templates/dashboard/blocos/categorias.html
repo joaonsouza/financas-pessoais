@@ -1,0 +1,25 @@
+<section class="bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5">
+  <h2 class="font-semibold mb-4">Despesas por categoria</h2>
+  {% if fatias %}
+    <div class="flex flex-col sm:flex-row items-center gap-6">
+      <div class="relative size-52 shrink-0">
+        <canvas id="grafico-categorias" aria-label="Despesas por categoria" role="img"></canvas>
+        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span class="text-xs text-ink-muted">Total</span>
+          <span id="grafico-total" class="text-lg font-semibold tabular-nums"></span>
+        </div>
+      </div>
+      <ul class="flex-1 w-full space-y-2 text-sm min-w-0">
+        {% set soma = fatias|sum(attribute="total") %}
+        {% for f in fatias %}
+          <li class="flex items-center justify-between gap-3">
+            <span class="flex items-center gap-2 min-w-0"><span class="size-2.5 rounded-full shrink-0" style="background: {{ f.cor }}"></span><span class="truncate">{{ f.nome }}</span></span>
+            <span class="tabular-nums shrink-0">{{ f.total|reais }}{% if soma %} <span class="text-ink-muted text-xs">{{ ((f.total / soma) * 100)|round|int }}%</span>{% endif %}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% else %}
+    <p class="text-sm text-ink-muted">Sem despesas neste mês.</p>
+  {% endif %}
+</section>

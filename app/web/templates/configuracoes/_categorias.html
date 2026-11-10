@@ -1,0 +1,176 @@
+{# Aba Categorias: árvore (uso de 12 meses, arrastar filhas) e painel da categoria escolhida (editar, regras,
+   juntar/excluir). Usa as classes definidas no topo de configuracoes/index.html. #}
+{% from "_seletor_categoria.html" import seletor_categoria with context %}
+{% set base_url = "/configuracoes?aba=categorias&tipo=" ~ tipo_cat %}
+{% set rotulo_grupo = {"fixo": "Fixo", "variavel": "Variável", "divida": "Dívida"} %}
+{% set rotulo_inflacao = {"": "Fora da inflação", "fixo": "Preço fixo", "consumo": "Consumo"} %}
+
+<div class="flex flex-wrap items-center gap-2 mb-4">
+  <nav class="inline-flex rounded-xl border border-line bg-card p-1 text-sm" aria-label="Tipo de categoria">
+    {% for t, r in [("despesa", "Despesas"), ("receita", "Receitas")] %}
+      <a href="/configuracoes?aba=categorias&tipo={{ t }}" {% if tipo_cat == t %}aria-current="page"{% endif %}
+         class="inline-flex items-center px-4 h-9 rounded-lg font-medium cursor-pointer transition-colors duration-150 {{ 'bg-primary-soft text-primary' if tipo_cat == t else 'text-ink-muted hover:text-ink' }}">{{ r }}</a>
+    {% endfor %}
+  </nav>
+  <div class="ml-auto flex flex-wrap items-center gap-2">
+    {% if not proposta %}
+    <form method="post" action="/configuracoes/categorias/organizar" x-data="{ carregando: false }" @submit="carregando = true">
+      <button :disabled="carregando" title="Agrupa as categorias soltas em mães e sugere grupo e natureza; você revisa antes de aplicar"
+              class="{{ botao_texto }} disabled:opacity-60 disabled:cursor-wait"><i data-lucide="sparkles" class="size-4"></i><span x-text="carregando ? 'A IA está pensando…' : 'Organizar com IA'">Organizar com IA</span></button>
+    </form>
+    {% endif %}
+    <a href="{{ base_url }}&cat=nova" class="{{ botao }}"><i data-lucide="plus" class="size-4"></i>Nova categoria</a>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start" x-data="arvoreCategorias()" data-arvore-categorias>
+  <section class="{{ cartao_css }} lg:col-span-3 py-2 text-sm" aria-label="Categorias de {{ 'receita' if tipo_cat == 'receita' else 'despesa' }}">
+    <p x-show="erro" x-cloak x-text="erro" role="alert" class="mx-3 my-1 rounded-xl bg-expense/10 text-expense px-3 py-2"></p>
+    <div x-show="arrastando" x-cloak @dragover.prevent="alvo = 'raiz'" @dragleave="alvo = null" @drop.prevent="soltar(null)"
+         :class="alvo === 'raiz' ? 'bg-primary-soft' : ''"
+         class="mx-3 my-1 rounded-xl border-2 border-dashed border-primary/50 text-primary text-center py-3 text-xs">Soltar aqui para virar categoria principal</div>
+    {% for mae, filhas in arvore %}
+      {% with c=mae, nivel=0, tem_filhas=filhas|length > 0 %}{% include "configuracoes/_linha_categoria.html" %}{% endwith %}
+      {% for filha in filhas %}
+        {% with c=filha, nivel=1, tem_filhas=false %}{% include "configuracoes/_linha_categoria.html" %}{% endwith %}
+      {% endfor %}
+    {% else %}
+      <p class="px-4 py-3 text-ink-muted">Nenhuma categoria de {{ "receita" if tipo_cat == "receita" else "despesa" }} ainda.</p>
+    {% endfor %}
+  </section>
+
+  {% set aberto = cat_sel or cat_nova %}
+  {% if aberto %}<a href="{{ base_url }}" class="fixed inset-0 z-30 bg-black/40 lg:hidden" aria-label="Fechar"></a>{% endif %}
+  <aside class="{{ cartao_css }} lg:col-span-2 p-5 text-sm space-y-5 {{ 'fixed inset-x-0 bottom-0 z-40 max-h-[85vh] overflow-y-auto rounded-b-none lg:static lg:max-h-none lg:overflow-visible lg:rounded-b-[20px]' if aberto else 'hidden lg:block' }}"
+         aria-label="Categoria escolhida">
+  {% if not aberto %}
+    <p class="text-ink-muted">Escolha uma categoria na lista para editar, ver as regras automáticas, juntar ou excluir. Para mudar a mãe de uma subcategoria, arraste pela alça ⠿.</p>
+  {% else %}
+    {% set c = cat_sel %}
+    {% set tem_filhas = c and impacto_sel.filhas %}
+    <div class="flex items-center gap-2">
+      <h2 class="font-semibold text-base flex-1">{{ c.nome if c else ("Nova categoria de " ~ ("receita" if tipo_cat == "receita" else "despesa")) }}</h2>
+      <a href="{{ base_url }}" class="lg:hidden size-11 -mr-2 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page" aria-label="Fechar"><i data-lucide="x" class="size-5"></i></a>
+    </div>
+
+    <form method="post" action="/configuracoes/categorias{{ '/' ~ c.id if c else '' }}" class="space-y-3">
+      {% if not c %}<input type="hidden" name="tipo" value="{{ tipo_cat }}">{% endif %}
+      <div class="flex gap-3 items-end">
+        <label class="{{ rotulo_css }} flex-1">Nome<input name="nome" value="{{ c.nome if c else '' }}" required {% if not c %}autofocus{% endif %} class="{{ campo }}"></label>
+        <label class="{{ rotulo_css }}">Cor<input type="color" name="cor" value="{{ c.cor if c else '#1E40AF' }}" class="size-11 rounded-xl border border-line bg-card p-1 cursor-pointer focus:outline-none focus:ring-4 focus:ring-primary/20"></label>
+      </div>
+      {% if tem_filhas %}
+        <p class="text-xs text-ink-muted">Categoria principal com {{ impacto_sel.filhas }} subcategoria(s): para virar subcategoria, mova as filhas antes.</p>
+      {% else %}
+        <div class="{{ rotulo_css }}">Mãe
+          {{ seletor_categoria("pai_id", (c.pai_id if c else "") or "", tipo_cat, vazio="Nenhuma (principal)", somente=maes_ids, rotulo_aria="Categoria-mãe") }}
+        </div>
+      {% endif %}
+      {% if tipo_cat == "despesa" %}
+        <div class="grid grid-cols-2 gap-3">
+          <label class="{{ rotulo_css }}">Grupo
+            <select name="grupo" class="{{ campo }}">{% for g, r in rotulo_grupo.items() %}<option value="{{ g }}" {% if (c.grupo if c else "variavel") == g %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+          </label>
+          <label class="{{ rotulo_css }}">Natureza
+            <select name="natureza" class="{{ campo }}">
+              {% for n, r in [("necessidade", "Necessidade"), ("desejo", "Desejo")] %}<option value="{{ n }}" {% if (c.natureza if c else "desejo") == n %}selected{% endif %}>{{ r }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="{{ rotulo_css }}">Inflação pessoal
+            <select name="inflacao" class="{{ campo }}">{% for v, r in rotulo_inflacao.items() %}<option value="{{ v }}" {% if ((c.inflacao if c else "") or "") == v %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+          </label>
+          <label class="flex items-center gap-2 min-h-11 self-end cursor-pointer"><input type="checkbox" name="essencial" {% if c and c.essencial %}checked{% endif %} class="{{ check_css }}"> Essencial</label>
+        </div>
+      {% endif %}
+      {% if c %}<label class="flex items-center gap-2 min-h-11 cursor-pointer"><input type="checkbox" name="ativa" {% if c.ativa %}checked{% endif %} class="{{ check_css }}"> Ativa (aparece para escolher)</label>{% endif %}
+      <button class="{{ botao }}"><i data-lucide="{{ 'check' if c else 'plus' }}" class="size-4"></i>{{ "Salvar" if c else "Criar" }}</button>
+    </form>
+
+    {% if c %}
+      {% set qtd, total = uso.get(c.id, (0, 0)) %}
+      <div class="border-t border-line pt-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span class="flex-1">{{ qtd }} lançamento(s) em 12 meses{% if qtd %} · {{ total|reais }}{% endif %}{% if impacto_sel.filhas %}, somando as subcategorias{% endif %}</span>
+        <a href="/lancamentos?categoria={{ c.id }}" class="text-primary font-medium hover:underline">Ver lançamentos →</a>
+      </div>
+
+      <div class="border-t border-line pt-4 space-y-2">
+        <h3 class="font-semibold">Regras automáticas ({{ regras_sel|length }})</h3>
+        {% if regras_sel %}
+          <p class="text-xs text-ink-muted">Na importação, descrições que contêm o padrão caem nesta categoria. O app cria as regras quando você categoriza.</p>
+          <ul class="divide-y divide-line">
+            {% for r in regras_sel %}
+            <li class="flex flex-wrap items-center gap-2 py-2">
+              <span class="flex-1 min-w-32 font-mono text-xs truncate" title="{{ 'Criada a partir de: ' ~ r.criada_de if r.criada_de else r.padrao }}">{{ r.padrao }}</span>
+              {% if r.criada_de and r.criada_de|upper != r.padrao %}<span class="sr-only">criada a partir de {{ r.criada_de }}</span>{% endif %}
+              <form method="post" action="/configuracoes/regras/{{ r.id }}" class="w-44" @change="$el.requestSubmit()">
+                {{ seletor_categoria("categoria_id", r.categoria_id, tipo_cat, vazio=none, rotulo_aria="Mover a regra " ~ r.padrao ~ " para") }}
+              </form>
+              <form method="post" action="/configuracoes/regras/{{ r.id }}/apagar">
+                <button class="{{ botao_perigo }} px-2" title="Apagar a regra" aria-label="Apagar a regra {{ r.padrao }}"><i data-lucide="x" class="size-4"></i></button>
+              </form>
+            </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-xs text-ink-muted">Nenhuma ainda. Elas nascem quando você categoriza lançamentos importados.</p>
+        {% endif %}
+      </div>
+
+      {# juntar e excluir: o mesmo efeito, com ou sem destino #}
+      {% set destinos = [] %}
+      {% for m, fs in arvore if m.id != c.id %}
+        {% set _ = destinos.append(m.id) %}
+        {% if not tem_filhas %}{% for f in fs if f.id != c.id %}{% set _ = destinos.append(f.id) %}{% endfor %}{% endif %}
+      {% endfor %}
+      <div class="border-t border-line pt-4 space-y-3" x-data="{ modo: null }">
+        <div class="flex flex-wrap gap-2">
+          <button type="button" @click="modo = modo === 'juntar' ? null : 'juntar'" class="{{ botao_texto }}"><i data-lucide="merge" class="size-4"></i>Juntar com…</button>
+          <button type="button" @click="modo = modo === 'excluir' ? null : 'excluir'" class="{{ botao_perigo }}"><i data-lucide="trash-2" class="size-4"></i>Excluir</button>
+        </div>
+        <form x-show="modo === 'juntar'" x-cloak method="post" action="/configuracoes/categorias/{{ c.id }}/remover" class="rounded-xl bg-page p-3 space-y-2">
+          <p>Juntar “{{ c.nome }}” com:</p>
+          {{ seletor_categoria("destino_id", "", tipo_cat, vazio=none, somente=destinos, rotulo_aria="Categoria que fica") }}
+          <p class="text-xs text-ink-muted">{{ impacto_sel.texto()|capitalize }} {{ "passa" if impacto_sel.total == 1 else "passam" }} para a categoria escolhida e “{{ c.nome }}” deixa de existir. Antes, o app faz um backup.</p>
+          <button class="{{ botao }}"><i data-lucide="merge" class="size-4"></i>Juntar</button>
+        </form>
+        <form x-show="modo === 'excluir'" x-cloak method="post" action="/configuracoes/categorias/{{ c.id }}/remover" class="rounded-xl bg-page p-3 space-y-2">
+          <input type="hidden" name="destino_id" value="">
+          {% if tem_filhas %}
+            <p>“{{ c.nome }}” tem subcategorias. Mova as filhas para outra mãe ou use “Juntar com…”.</p>
+          {% else %}
+            <p>{% if impacto_sel.total %}{{ impacto_sel.texto()|capitalize }} {{ "fica" if impacto_sel.total == 1 else "ficam" }} sem categoria (regras e limites de orçamento são apagados).{% else %}Nada usa esta categoria.{% endif %} Antes, o app faz um backup.</p>
+            <button class="inline-flex items-center gap-2 rounded-xl px-4 h-11 font-medium bg-expense text-white hover:opacity-90 cursor-pointer"><i data-lucide="trash-2" class="size-4"></i>Excluir “{{ c.nome }}”</button>
+          {% endif %}
+        </form>
+      </div>
+    {% endif %}
+  {% endif %}
+  </aside>
+</div>
+
+<script>
+  // arrastar na árvore: solta numa mãe (nova mãe) ou na faixa do topo (vira principal)
+  function arvoreCategorias() {
+    return {
+      arrastando: null, alvo: null, erro: "",
+      arrastar(id, e) {
+        this.arrastando = id;
+        this.erro = "";
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", String(id));
+      },
+      soltar(paiId) {
+        var id = this.arrastando, self = this;
+        this.arrastando = null;
+        this.alvo = null;
+        if (!id || id === paiId) return;
+        fetch("/configuracoes/categorias/" + id + "/mover", {
+          method: "POST", body: new URLSearchParams({ pai_id: paiId == null ? "" : String(paiId) }),
+        })
+          .then(function (r) { return r.json().then(function (c) { return { ok: r.ok, c: c }; }); })
+          .then(function (res) { if (res.ok) location.reload(); else self.erro = res.c.erro || "Não deu para mover."; })
+          .catch(function () { self.erro = "Não deu para mover."; });
+      },
+    };
+  }
+</script>

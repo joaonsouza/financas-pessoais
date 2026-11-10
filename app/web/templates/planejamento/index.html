@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+{% from "_seletor_categoria.html" import seletor_categoria with context %}
+{% from "_macros.html" import barra, texto_faixa %}
+{% from "objetivos/_macros.html" import cartao_objetivo %}
+{% block titulo %}Planejamento{% endblock %}
+{% block cabecalho %}Planejamento{% endblock %}
+{% block conteudo %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set botao_texto = "inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set botao_perigo = "inline-flex items-center justify-center size-11 rounded-xl text-ink-muted hover:text-expense hover:bg-expense/10 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set rotulo_css = "flex flex-col gap-1 text-sm font-medium text-ink-muted" %}
+{% set cor_faixa = {"ok": "text-income", "atencao": "text-warning", "estourado": "text-expense"} %}
+
+{% if erro %}
+  <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+
+<div x-data="{ criar: {{ 'true' if abrir_criar else 'false' }} }">
+
+<section id="este-mes" aria-labelledby="titulo-este-mes" class="mb-8">
+  <h2 id="titulo-este-mes" class="text-lg font-semibold mb-3">Este mês</h2>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  {# Teto e limites por categoria #}
+  <section class="{{ cartao_css }} p-5 lg:col-span-2" aria-labelledby="titulo-orcamento">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h2 id="titulo-orcamento" class="font-semibold">Orçamento do mês</h2>
+      <form method="post" action="/planejamento/copiar">
+        <input type="hidden" name="mes" value="{{ mes }}">
+        <button class="{{ botao_texto }}" {% if not tem_anterior %}disabled title="O mês anterior não tem orçamento"{% endif %}><i data-lucide="copy" class="size-4"></i>Copiar do mês anterior</button>
+      </form>
+    </div>
+
+    <div class="rounded-2xl border border-line p-4 mb-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <span class="font-medium flex items-center gap-2"><i data-lucide="gauge" class="size-5 text-primary"></i>Teto total de gastos</span>
+        <form method="post" action="/planejamento/limite" class="flex items-center gap-2">
+          <input type="hidden" name="mes" value="{{ mes }}"><input type="hidden" name="categoria_id" value="">
+          <label class="sr-only" for="limite-teto">Teto total em reais</label>
+          <input data-mascara="reais" id="limite-teto" name="limite" inputmode="decimal" placeholder="{{ teto.limite|reais_input if teto else '0,00' }}" value="{{ '' if not teto or teto.automatico else teto.limite|reais_input }}" class="{{ campo }} w-32 text-right tabular-nums">
+          <button class="{{ botao }}" aria-label="Salvar teto"><i data-lucide="check" class="size-4"></i>Salvar</button>
+        </form>
+      </div>
+      {% if teto %}
+        {% if teto.automatico %}<p class="mt-2 text-xs text-ink-muted">automático · {{ teto_auto_pct }}% das receitas. Digite um valor para fixar o teto; salvar vazio ou 0 volta ao automático.</p>
+        {% elif teto_recomendado > 0 %}<p class="mt-2 text-xs text-ink-muted tabular-nums">recomendado pelo 50/30/20: {{ teto_recomendado|reais }} ({{ teto_auto_pct }}% das receitas){% if teto.limite < teto_recomendado %} · o seu está mais apertado{% elif teto.limite > teto_recomendado %} · o seu está mais folgado{% endif %}. Salve 0 para usar o automático.</p>{% endif %}
+        {% set parc_pct = [parcelas_gasto * 100 // teto.limite, teto.pct, 100]|min if teto.limite > 0 else 0 %}
+        {% if parcelas_gasto > 0 %}
+          {# a barra do teto dividida: o pedaço das parcelas (amarelo) e o resto do gasto (cor da faixa) #}
+          <div class="mt-3 h-2.5 rounded-full bg-page overflow-hidden flex" role="progressbar" aria-label="Teto total: {{ parcelas_gasto|reais }} em parcelas" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ [teto.pct, 100]|min }}">
+            <div class="h-full bg-warning" style="width: {{ parc_pct }}%" title="Parcelas: {{ parcelas_gasto|reais }}"></div>
+            <div class="h-full {{ {'ok': 'bg-income', 'atencao': 'bg-warning/40', 'estourado': 'bg-expense'}[teto.faixa] }}" style="width: {{ [[teto.pct, 100]|min - parc_pct, 0]|max }}%" title="Demais gastos"></div>
+          </div>
+          <p class="mt-1.5 text-xs text-ink-muted tabular-nums flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-warning"></span>Parcelas {{ parcelas_gasto|reais }}</span>
+            <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full {{ {'ok': 'bg-income', 'atencao': 'bg-warning/40', 'estourado': 'bg-expense'}[teto.faixa] }}"></span>Demais gastos {{ (teto.projetado - parcelas_gasto)|reais }}</span>
+          </p>
+        {% else %}
+          <div class="mt-3">{{ barra(teto.pct, teto.faixa, "Teto total") }}</div>
+        {% endif %}
+        <p class="mt-2 text-sm tabular-nums {{ cor_faixa[teto.faixa] }}">{{ teto.projetado|reais }} de {{ teto.limite|reais }} ({{ teto.pct }}%) · {{ texto_faixa(teto.faixa) }}
+          <span class="text-ink-muted">· já pago {{ teto.efetivado|reais }}</span></p>
+      {% else %}
+        <p class="mt-2 text-sm text-ink-muted">Defina um teto para o total de despesas do mês.</p>
+      {% endif %}
+    </div>
+
+    <ul class="divide-y divide-line">
+      {% for l in linhas %}
+        <li class="py-3">
+          <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <span class="flex items-center gap-2 min-w-0 flex-1"><span class="size-3 rounded-full shrink-0" style="background: {{ l.categoria.cor }}"></span><span class="font-medium truncate">{{ rotulos[l.categoria.id] }}</span></span>
+            <form method="post" action="/planejamento/limite" class="flex items-center gap-1">
+              <input type="hidden" name="mes" value="{{ mes }}"><input type="hidden" name="categoria_id" value="{{ l.categoria.id }}">
+              <label class="sr-only" for="limite-{{ l.categoria.id }}">Limite de {{ l.categoria.nome }}</label>
+              <input data-mascara="reais" id="limite-{{ l.categoria.id }}" name="limite" inputmode="decimal" value="{{ l.limite|reais_input }}" class="{{ campo }} w-28 text-right tabular-nums">
+              <button class="{{ botao_texto }} !px-2" aria-label="Salvar limite de {{ l.categoria.nome }}"><i data-lucide="check" class="size-4"></i></button>
+            </form>
+            <form method="post" action="/planejamento/limite">
+              <input type="hidden" name="mes" value="{{ mes }}"><input type="hidden" name="categoria_id" value="{{ l.categoria.id }}"><input type="hidden" name="limite" value="0">
+              <button class="{{ botao_perigo }}" aria-label="Remover limite de {{ l.categoria.nome }}"><i data-lucide="trash-2" class="size-4"></i></button>
+            </form>
+          </div>
+          <div class="mt-2">{{ barra(l.pct, l.faixa, l.categoria.nome) }}</div>
+          <p class="mt-1 text-sm tabular-nums {{ cor_faixa[l.faixa] }}">{{ l.projetado|reais }} de {{ l.limite|reais }} ({{ l.pct }}%) · {{ texto_faixa(l.faixa) }}
+            <span class="text-ink-muted">· já pago {{ l.efetivado|reais }}</span></p>
+        </li>
+      {% else %}
+        <li class="py-3 text-sm text-ink-muted">Nenhum limite por categoria neste mês.</li>
+      {% endfor %}
+    </ul>
+
+    {% if sem_limite %}
+      <form id="form-limite" method="post" action="/planejamento/limite" class="mt-4 flex flex-wrap items-end gap-3">
+        <input type="hidden" name="mes" value="{{ mes }}">
+        <div class="{{ rotulo_css }}">Categoria
+          {{ seletor_categoria("categoria_id", "", "despesa", vazio=none, somente=sem_limite|map(attribute="id")|list) }}
+        </div>
+        <label class="{{ rotulo_css }}">Limite<input data-mascara="reais" id="limite-valor" name="limite" required inputmode="decimal" placeholder="0,00" class="{{ campo }} w-32 text-right tabular-nums"></label>
+        <button class="{{ botao }}"><i data-lucide="plus" class="size-4"></i>Adicionar limite</button>
+      </form>
+    {% endif %}
+  </section>
+
+  {# 50/30/20 #}
+  <section class="{{ cartao_css }} p-5" aria-labelledby="titulo-503020">
+    <h2 id="titulo-503020" class="font-semibold mb-1">Painel 50/30/20</h2>
+    <p class="text-sm text-ink-muted mb-4">Base: receitas do mês ({{ painel.receitas|reais }}), com o que já foi lançado e o previsto.</p>
+    {% if painel.receitas > 0 %}
+      <ul class="space-y-4">
+        {% for f in painel.fatias %}
+          {% set faixa = "ok" if (loop.last and f.pct_real >= f.pct_meta) or (not loop.last and f.pct_real <= f.pct_meta) else ("estourado" if not loop.last else "atencao") %}
+          <li>
+            <div class="flex items-baseline justify-between gap-3 text-sm">
+              <span class="font-medium">{{ f.rotulo }}</span>
+              <span class="tabular-nums">{{ f.pct_real|pct(1) }} <span class="text-ink-muted">da meta de {{ f.pct_meta }}%</span></span>
+            </div>
+            <div class="relative mt-1">
+              {{ barra(f.pct_real, faixa, f.rotulo) }}
+              <span class="absolute top-[-3px] h-4 w-0.5 bg-ink rounded" style="left: {{ [f.pct_meta, 100]|min }}%" title="Meta {{ f.pct_meta }}%"></span>
+            </div>
+            <p class="mt-1 text-sm tabular-nums text-ink-muted">{{ f.real|reais }} · {{ "%s acima da meta"|format(f.diferenca|reais) if f.diferenca > 0 else ("%s abaixo da meta"|format((-f.diferenca)|reais) if f.diferenca < 0 else "na meta") }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+      {% if painel.sem_categoria > 0 %}
+        <p role="note" class="mt-4 rounded-xl bg-warning/10 border border-warning/30 text-warning px-3 py-2 text-sm flex items-start gap-2">
+          <i data-lucide="alert-triangle" class="size-5 shrink-0"></i>
+          <span>{{ painel.sem_categoria|reais }} ({{ painel.pct_sem_categoria|pct(1) }} das despesas) estão sem categoria e ficam fora das três fatias, então o painel está incompleto.
+            <a href="/configuracoes?aba=categorias" class="underline font-medium">Categorizar agora</a></span>
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="text-sm text-ink-muted">Sem receitas neste mês para calcular as proporções.</p>
+    {% endif %}
+    <form method="post" action="/planejamento/metas-503020" class="mt-5 flex flex-wrap items-end gap-3 border-t border-line pt-4">
+      <input type="hidden" name="mes" value="{{ mes }}">
+      {% for nome, rotulo, valor in [("necessidades", "Necessidades %", metas_pct[0]), ("desejos", "Desejos %", metas_pct[1]), ("terceira", "Dívidas e sobra %", metas_pct[2])] %}
+        <label class="{{ rotulo_css }}">{{ rotulo }}<input name="{{ nome }}" value="{{ valor }}" inputmode="numeric" required class="{{ campo }} w-24 text-right tabular-nums"></label>
+      {% endfor %}
+      <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar metas</button>
+      <p class="w-full text-xs text-ink-muted">As três metas precisam somar 100%.</p>
+    </form>
+  </section>
+
+    {# Onde o dinheiro foi: gasto por categoria contra o limite do orçamento; a meta de economia numa linha no topo #}
+    {% set ids_sem_limite = sem_limite|map(attribute="id")|list %}
+    <section id="economia" class="{{ cartao_css }} p-5" aria-labelledby="titulo-onde-foi">
+      <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-3">
+        <h2 id="titulo-onde-foi" class="font-semibold">Onde o dinheiro foi</h2>
+        <span class="text-sm text-ink-muted tabular-nums">{{ gasto_mes|reais }}{% if painel.receitas > 0 %} · {{ (gasto_mes * 100 / painel.receitas)|round|int }}% da receita{% endif %}</span>
+      </div>
+      {% for m, e in economias %}
+        <p class="mb-4 rounded-xl bg-page px-3 py-2 text-sm flex flex-wrap items-center gap-x-2 gap-y-1">
+          <i data-lucide="piggy-bank" class="size-4 text-primary shrink-0"></i>
+          <span>{{ m.nome }}: <span class="font-medium tabular-nums">{{ m.valor_alvo|reais }}/mês</span></span>
+          {% if e %}<span class="text-ink-muted tabular-nums">· previsto {{ e.projetado|reais }}</span>
+            {% if e.atingida_projetado %}<span class="text-income font-medium inline-flex items-center gap-1"><i data-lucide="check-circle" class="size-3.5"></i>meta atingida</span>
+            {% else %}<span class="text-warning font-medium tabular-nums">· faltam {{ (e.meta - e.projetado)|reais }}</span>{% endif %}
+          {% endif %}
+          <a href="/planejamento/metas/{{ m.id }}" class="ml-auto text-primary hover:underline">Alterar</a>
+        </p>
+      {% else %}
+        <p class="mb-4 text-sm text-ink-muted flex flex-wrap items-center gap-2"><i data-lucide="piggy-bank" class="size-4"></i>Sem meta de economia.
+          <button type="button" @click="criar = true" class="text-primary hover:underline cursor-pointer">Definir</button></p>
+      {% endfor %}
+      <ul class="space-y-3" aria-label="Despesas do mês por categoria">
+        {% for i in onde_foi %}
+          {% set acima = i.limite and i.total > i.limite %}
+          {% set lista = "/lancamentos?mes=" ~ mes ~ "&tipo=despesa&categoria=" ~ (i.categoria_id or "sem") if i.categoria_id or i.nome == "Sem categoria" else none %}
+          <li x-data="{ aberto: false }" title="{{ i.nome }}: {{ i.total|reais }}{% if i.limite %} de {{ i.limite|reais }} de limite{% endif %}">
+            {# o nome leva à lista de despesas da categoria (para conferir e recategorizar); a seta abre as subcategorias #}
+            <div class="flex items-center justify-between gap-3 text-sm">
+              <span class="flex items-center gap-2 min-w-0">
+                <span class="size-2.5 rounded-full shrink-0 {{ '' if i.cor else 'bg-ink-muted' }}" {% if i.cor %}style="background: {{ i.cor }}"{% endif %}></span>
+                {% if lista %}<a href="{{ lista }}" class="truncate font-medium hover:text-primary hover:underline" title="Ver as despesas de {{ i.nome }}">{{ i.nome }}</a>
+                {% else %}<span class="truncate font-medium">{{ i.nome }}</span>{% endif %}
+                {% if i.filhas %}<button type="button" @click="aberto = !aberto" :aria-expanded="aberto" aria-controls="sub-{{ loop.index }}" aria-label="Subcategorias de {{ i.nome }}"
+                        class="size-7 -my-1 shrink-0 inline-flex items-center justify-center rounded-lg text-ink-muted hover:text-primary hover:bg-primary-soft cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+                  <span class="inline-flex transition-transform duration-150" :class="aberto && 'rotate-180'"><i data-lucide="chevron-down" class="size-4"></i></span></button>{% endif %}
+              </span>
+              <span class="tabular-nums shrink-0">{{ i.total|reais }}{% if painel.receitas > 0 %} <span class="text-xs text-ink-muted">{{ (i.total * 100 / painel.receitas)|round|int }}%</span>{% endif %}</span>
+            </div>
+            <div class="relative mt-1 h-2 rounded-full bg-page">
+              <div class="h-full rounded-full {{ 'bg-expense' if acima else 'bg-primary' }}" style="width: {{ i.largura }}%"></div>
+              {% if i.marca is not none %}<span class="absolute -top-[3px] h-3.5 w-0.5 rounded bg-ink" style="left: calc({{ i.marca }}% - 1px)" aria-hidden="true"></span>{% endif %}
+            </div>
+            {% if acima %}<p class="mt-1 text-xs text-expense flex items-center gap-1"><i data-lucide="alert-triangle" class="size-3.5"></i>{{ (i.total - i.limite)|reais }} acima do limite de {{ i.limite|reais }}</p>
+            {% elif i.limite %}<p class="mt-1 text-xs text-ink-muted tabular-nums">limite {{ i.limite|reais }} · sobram {{ (i.limite - i.total)|reais }}</p>
+            {% elif i.categoria_id in ids_sem_limite %}<button type="button" class="mt-1 text-xs text-primary hover:underline cursor-pointer"
+                onclick="const f = document.getElementById('form-limite'); definirCategoria(f, 'categoria_id', '{{ i.categoria_id }}'); f.scrollIntoView({block: 'center'}); document.getElementById('limite-valor').focus()">definir limite</button>{% endif %}
+            {% if i.filhas %}
+              <ul id="sub-{{ loop.index }}" x-show="aberto" x-cloak class="mt-2 ml-4 pl-3 border-l border-line space-y-2" aria-label="Subcategorias de {{ i.nome }}">
+                {% for nome, valor, largura, cid, marca, limite in i.filhas %}
+                  {% set acima_f = limite and valor > limite %}
+                  <li title="{{ nome }}: {{ valor|reais }}{% if limite %} de {{ limite|reais }} de limite{% endif %}">
+                    <div class="flex items-baseline justify-between gap-3 text-xs">
+                      {% if cid %}<a href="/lancamentos?mes={{ mes }}&tipo=despesa&categoria={{ cid }}" class="truncate text-ink-muted hover:text-primary hover:underline" title="Ver as despesas de {{ nome }}">{{ nome }}</a>
+                      {% else %}<span class="truncate text-ink-muted">{{ nome }}</span>{% endif %}
+                      <span class="tabular-nums shrink-0">{{ valor|reais }}{% if i.total %} <span class="text-ink-muted">{{ (valor * 100 / i.total)|round|int }}%</span>{% endif %}</span>
+                    </div>
+                    <div class="relative mt-1 h-1.5 rounded-full bg-page">
+                      <div class="h-full rounded-full {{ 'bg-expense' if acima_f else 'bg-primary/60' }}" style="width: {{ largura }}%"></div>
+                      {% if marca is not none %}<span class="absolute -top-[3px] h-3 w-0.5 rounded bg-ink" style="left: calc({{ marca }}% - 1px)" aria-hidden="true"></span>{% endif %}
+                    </div>
+                    {% if acima_f %}<p class="mt-0.5 text-xs text-expense">{{ (valor - limite)|reais }} acima do limite de {{ limite|reais }}</p>
+                    {% elif limite %}<p class="mt-0.5 text-xs text-ink-muted tabular-nums">limite {{ limite|reais }} · sobram {{ (limite - valor)|reais }}</p>{% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </li>
+        {% else %}
+          <li class="text-sm text-ink-muted">Sem despesas neste mês.</li>
+        {% endfor %}
+      </ul>
+      {% set creditos = gasto_mes - onde_foi|sum(attribute="total") %}
+      {% if creditos < 0 %}
+        {# ex.: "crédito de parcelamento de compra" do cartão: a categoria fecha o mês negativa e fica fora das barras #}
+        <p class="mt-3 pt-3 border-t border-line text-sm flex items-baseline justify-between gap-3" title="Categorias em que os créditos e estornos do mês passaram dos gastos">
+          <span class="text-ink-muted">Créditos e estornos <span class="text-xs">(categorias com saldo negativo no mês)</span></span>
+          <span class="tabular-nums text-income shrink-0">{{ creditos|reais }}</span>
+        </p>
+      {% endif %}
+    </section>
+
+  {# Parcelas do mês contra o teto #}
+  {% set total_parc, teto_parc = parcelas_mes %}
+  {% set acima_parc = teto_parc > 0 and total_parc > teto_parc %}
+  <section class="{{ cartao_css }} p-5 lg:col-span-2" aria-labelledby="titulo-parcelas">
+    <div class="flex items-center justify-between gap-3 mb-1">
+      <h2 id="titulo-parcelas" class="font-semibold flex items-center gap-2"><i data-lucide="layers" class="size-5 text-primary"></i>Parcelas do mês</h2>
+      <a href="/cartoes/parcelas" class="text-sm text-primary font-medium hover:underline">Ver parcelas</a>
+    </div>
+    <div class="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-center mt-2">
+    <div>
+    <div class="text-2xl font-semibold tabular-nums {{ 'text-expense' if acima_parc }}">{{ total_parc|reais }}</div>
+    {% if teto_parc > 0 %}
+      <div class="text-sm text-ink-muted mt-1">de {{ teto_parc|reais }} de teto{% if acima_parc %} · <span class="text-expense font-medium">acima do teto em {{ (total_parc - teto_parc)|reais }}</span>{% endif %}</div>
+      <div class="mt-3 h-2 rounded-full bg-page overflow-hidden" role="progressbar" aria-valuemin="0" aria-label="Parcelas do mês em relação ao teto" aria-valuemax="{{ teto_parc }}" aria-valuenow="{{ [total_parc, teto_parc]|min }}">
+        <div class="h-full rounded-full {{ 'bg-expense' if acima_parc else 'bg-primary' }}" style="width: {{ ([total_parc * 100 // teto_parc, 100]|min) }}%"></div>
+      </div>
+    {% else %}
+      <div class="text-sm text-ink-muted mt-1">Sem teto definido.</div>
+    {% endif %}
+    </div>
+    {% if parcelas_grafico %}
+      <div class="mt-4 lg:mt-0 lg:col-span-2 h-48"><canvas id="grafico-parcelas-mes" role="img" aria-label="Parcelas do mês contra o teto"></canvas></div>
+    {% endif %}
+    </div>
+  </section>
+
+  {# Ajuste do mês #}
+  <details class="{{ cartao_css }} p-5 lg:col-span-2" {% if ajuste %}open{% endif %}>
+    <summary class="cursor-pointer font-semibold min-h-11 flex items-center gap-2 rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" id="titulo-ajuste"><i data-lucide="sliders-horizontal" class="size-4 text-ink-muted"></i>Ajuste do mês{% if ajuste %} <span class="text-sm font-normal text-ink-muted">· {{ ajuste.descricao }}</span>{% endif %}</summary>
+    <p class="text-sm text-ink-muted mb-4">Um ajuste por vez: escolha uma mudança, veja quanto ela libera e para onde vai o dinheiro.</p>
+    <form method="post" action="/planejamento/ajuste" class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+      <input type="hidden" name="mes" value="{{ mes }}">
+      <label class="{{ rotulo_css }} sm:col-span-2">O que vou ajustar<input name="descricao" value="{{ ajuste.descricao if ajuste else '' }}" maxlength="200" class="{{ campo }}"></label>
+      <label class="{{ rotulo_css }}">Quanto libera por mês<input data-mascara="reais" name="valor_liberado" inputmode="decimal" placeholder="0,00" value="{{ ajuste.valor_liberado|reais_input if ajuste else '' }}" class="{{ campo }} text-right tabular-nums"></label>
+      <label class="{{ rotulo_css }}">Para onde vai<input name="destino" value="{{ ajuste.destino or '' if ajuste else '' }}" maxlength="200" class="{{ campo }}"></label>
+      <div class="sm:col-span-2 flex items-center gap-3">
+        <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar ajuste</button>
+        <span class="text-xs text-ink-muted">Deixe a descrição vazia para remover.</span>
+      </div>
+    </form>
+  </details>
+
+  </div>
+</section>
+
+<section id="metas" aria-labelledby="titulo-metas">
+  <h2 id="titulo-metas" class="text-lg font-semibold mb-3">Metas</h2>
+  <div class="mb-4">
+{% for m, r, mensal, projecao, plano in reservas %}
+  {% include "objetivos/_reserva.html" %}
+{% else %}
+<section id="reserva" class="{{ cartao_css }} p-5" aria-labelledby="titulo-reserva" x-data="{ criando: false }">
+  <h2 id="titulo-reserva" class="font-semibold mb-1 flex items-center gap-2"><i data-lucide="shield-check" class="size-5 text-primary"></i>Reserva de emergência</h2>
+  <p class="text-sm text-ink-muted mb-4">O primeiro passo: um colchão para o imprevisto. O app sugere o alvo pelo seu gasto essencial ({{ gasto_essencial|reais }}/mês × 3 ou 6 meses).</p>
+  <button type="button" x-show="!criando" @click="criando = true" class="{{ botao }}"><i data-lucide="plus" class="size-4"></i>Criar reserva</button>
+  <form x-show="criando" x-cloak method="post" action="/planejamento/metas" class="flex flex-wrap items-end gap-3">
+    <input type="hidden" name="tipo" value="reserva_emergencia"><input type="hidden" name="voltar" value="planejamento">
+    <input type="hidden" name="mes" value="{{ mes }}">
+    <input type="hidden" name="icone" value="shield-check">
+    <label class="{{ rotulo_css }}">Nome<input name="nome" value="Reserva de emergência" required maxlength="80" class="{{ campo }}"></label>
+    <label class="{{ rotulo_css }}">Onde o dinheiro fica<select name="conta_id" class="{{ campo }}"><option value="">Fora do app</option>{% for c in contas %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select></label>
+    <label class="{{ rotulo_css }}">Já tem guardado<input data-mascara="reais" name="valor_manual" inputmode="decimal" placeholder="0,00" class="{{ campo }} w-32 text-right tabular-nums"></label>
+    <label class="{{ rotulo_css }}">Meses de cobertura<select name="multiplicador_reserva" class="{{ campo }}"><option value="3">3 (renda estável)</option><option value="6">6 (renda variável)</option></select></label>
+    <label class="{{ rotulo_css }}">Teto (opcional)<input data-mascara="reais" name="valor_alvo" inputmode="decimal" placeholder="sugestão" class="{{ campo }} w-32 text-right tabular-nums"></label>
+    <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Criar</button>
+  </form>
+</section>
+{% endfor %}
+  </div>
+{# Expira em breve: o objetivo em andamento de prazo mais próximo (até 90 dias) #}
+{% if expira %}
+  {% set em, ep = expira %}
+  <a href="/planejamento/metas/{{ em.id }}" class="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl border border-expense/30 bg-expense/5 px-4 py-3 text-sm hover:border-expense transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+    <i data-lucide="alarm-clock" class="size-5 text-expense shrink-0" aria-hidden="true"></i>
+    <span class="font-semibold">{{ "Venceu" if em.prazo < hoje else "Expira em breve" }}:</span>
+    <span>{{ em.nome }}</span>
+    <span class="text-ink-muted">|</span>
+    <span>{{ "Venceu em" if em.prazo < hoje else "Vence em" }} <span class="font-semibold text-expense tabular-nums">{{ em.prazo|data_br }}</span></span>
+    <span class="text-ink-muted">· faltam {{ ep.falta|reais }}</span>
+  </a>
+{% endif %}
+
+{# Abas, filtro por horizonte e ordenação #}
+{% set seg = "flex-1 sm:flex-none sm:min-w-44 h-11 px-5 rounded-xl inline-flex items-center justify-center gap-2 font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+  <nav class="flex gap-1 p-1 rounded-2xl bg-page border border-line w-full sm:w-auto" aria-label="Situação dos objetivos">
+    <a href="{{ links.abas.andamento }}" class="{{ seg }} {{ 'bg-card text-ink shadow-sm' if aba == 'andamento' else 'text-ink-muted hover:text-ink' }}" {% if aba == 'andamento' %}aria-current="page"{% endif %}>Em andamento <span class="text-xs tabular-nums text-ink-muted">{{ n_andamento }}</span></a>
+    <a href="{{ links.abas.concluidos }}" class="{{ seg }} {{ 'bg-card text-ink shadow-sm' if aba == 'concluidos' else 'text-ink-muted hover:text-ink' }}" {% if aba == 'concluidos' %}aria-current="page"{% endif %}>Concluídos <span class="text-xs tabular-nums text-ink-muted">{{ n_concluidos }}</span></a>
+  </nav>
+  <label class="flex items-center gap-2 text-sm text-ink-muted">Ordenar por
+    <select onchange="location.href = this.value" class="h-11 rounded-xl border border-line bg-card px-3 text-ink focus:outline-none focus:ring-4 focus:ring-primary/20">
+      {% for chave, rotulo in ordens.items() %}<option value="{{ links.ordens[chave] }}" {% if chave == ordem %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+    </select>
+  </label>
+</div>
+<div class="flex flex-wrap gap-2 mb-5" role="group" aria-label="Horizonte">
+  {% for chave, rotulo in [("", "Todos")] + horizontes.items()|list %}
+    <a href="{{ links.horizontes[chave] }}" class="h-9 px-4 rounded-full inline-flex items-center text-sm font-medium transition-colors duration-150 {{ 'bg-primary text-white' if horizonte == chave else 'bg-card border border-line text-ink-muted hover:text-ink' }}" {% if horizonte == chave %}aria-current="true"{% endif %}>{{ rotulo }}</a>
+  {% endfor %}
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+    {% for m, p, agendado, mensal in itens %}{{ cartao_objetivo(m, p, agendado, hoje, horizontes, mensal) }}{% endfor %}
+    {% if aba == "andamento" %}
+    <button type="button" @click="criar = true" class="{{ cartao_css }} p-5 min-h-48 flex flex-col items-center justify-center gap-3 text-ink-muted hover:text-primary transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+      <span class="size-12 rounded-full border-2 border-current flex items-center justify-center"><i data-lucide="plus" class="size-6"></i></span>
+      <span class="font-semibold">Nova meta</span>
+    </button>
+    {% endif %}
+  </div>
+  {% if not itens and aba == "concluidos" %}<p class="text-sm text-ink-muted mb-6">Nenhuma meta concluída ainda. Quando o guardado chegar ao alvo, ela aparece aqui.</p>{% endif %}
+</section>
+
+{# Criar novo (modal) #}
+<div x-show="criar" x-cloak class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 bg-black/50 overflow-y-auto" @keydown.escape.window="criar = false">
+  <div @click.outside="criar = false" role="dialog" aria-modal="true" aria-labelledby="titulo-criar"
+       class="w-full max-w-2xl bg-card rounded-[20px] border border-line shadow-2xl p-6 space-y-4">
+    <div class="flex items-center justify-between">
+      <h2 id="titulo-criar" class="text-lg font-semibold">Nova meta</h2>
+      <button type="button" @click="criar = false" aria-label="Fechar" class="size-11 -mr-2 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page cursor-pointer"><i data-lucide="x" class="size-5"></i></button>
+    </div>
+    {% with m=none, acao="/planejamento/metas", voltar="" %}{% include "objetivos/_form_meta.html" %}{% endwith %}
+  </div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if parcelas_grafico %}
+<script src="/static/vendor/chart.umd.js"></script>
+<script>
+  (() => {
+    const g = {{ parcelas_grafico|tojson }};
+    const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const cor = (i) => g.acima[i] ? css("--c-expense") : (g.passado[i] ? css("--c-ink-muted") : css("--c-primary"));
+    const datasets = [{
+      type: "bar", label: "Parcelas", data: g.valores, borderRadius: 4,
+      backgroundColor: g.valores.map((_, i) => cor(i) + (g.selecionado[i] ? "" : "99")),
+      borderColor: g.valores.map((_, i) => g.selecionado[i] ? css("--c-ink") : "transparent"), borderWidth: 2,
+    }];
+    if (g.teto > 0) {
+      datasets.push({ type: "line", label: "Teto", data: g.valores.map(() => g.teto), borderColor: css("--c-warning"),
+                      borderDash: [6, 4], pointRadius: 0, borderWidth: 2 });
+    }
+    new Chart(document.getElementById("grafico-parcelas-mes"), {
+      data: { labels: g.rotulos, datasets },
+      options: {
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => c.dataset.label + ": " + brl(c.parsed.y) } } },
+        scales: { y: { beginAtZero: true, ticks: { callback: (v) => brl(v) } } },
+      },
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

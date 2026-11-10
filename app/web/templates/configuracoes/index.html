@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+{% from "_seletor_categoria.html" import seletor_categoria with context %}
+{% block titulo %}Configurações{% endblock %}
+{% block cabecalho %}Configurações{% endblock %}
+{% block conteudo %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set botao_texto = "inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set botao_perigo = "inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-ink-muted hover:text-expense hover:bg-expense/10 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set rotulo_css = "flex flex-col gap-1 font-medium text-ink-muted" %}
+{% set check_css = "size-5 rounded accent-[var(--c-primary)] cursor-pointer" %}
+
+{# Open Finance desligado: o endereço antigo cai na visão geral #}
+{% set aba = "geral" if aba == "openfinance" and not open_finance_ativo else aba %}
+<div class="lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8 lg:items-start">
+<nav class="flex lg:flex-col gap-2 lg:gap-1 mb-6 overflow-x-auto pb-1 lg:pb-0 lg:sticky lg:top-6" aria-label="Seções de configurações">
+  {% for chave, rotulo, icone in [("geral", "Visão geral", "layout-grid"), ("categorias", "Categorias", "tags"), ("preferencias", "Preferências", "sliders-horizontal"), ("backup", "Backup", "database-backup"), ("ia", "IA", "sparkles"), ("investimentos", "Investimentos", "trending-up")] + ([("openfinance", "Open Finance", "landmark")] if open_finance_ativo else []) %}
+    <a href="?aba={{ chave }}" {% if aba == chave %}aria-current="page"{% endif %}
+       class="inline-flex shrink-0 items-center gap-2 px-4 h-11 rounded-xl text-sm font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 {{ 'bg-primary-soft text-primary' if aba == chave else 'bg-card border border-line lg:border-transparent lg:bg-transparent text-ink-muted hover:text-ink lg:hover:bg-card' }}">
+      <i data-lucide="{{ icone }}" class="size-4"></i>{{ rotulo }}
+    </a>
+  {% endfor %}
+</nav>
+<div class="min-w-0" data-secao="{{ aba }}">
+
+{% if erro %}
+  <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+
+{% if mensagem %}
+  <div role="status" class="mb-6 rounded-xl bg-income/10 border border-income/30 text-income px-4 py-3 flex items-start gap-2"><i data-lucide="check-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ mensagem }}</span></div>
+{% endif %}
+
+{% if aba == "geral" %}
+  {% set cores_estado = {"ok": "bg-income/15 text-income", "aviso": "bg-warning/15 text-warning", "vazio": "bg-page text-ink-muted"} %}
+  {% set icones_estado = {"ok": "check", "aviso": "alert-triangle", "vazio": "circle-dashed"} %}
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {% for c in visao %}
+    <a href="?aba={{ c.aba }}" class="{{ cartao_css }} p-5 flex items-start gap-3 hover:border-primary/40 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+      <span class="size-11 rounded-full shrink-0 flex items-center justify-center bg-primary-soft text-primary"><i data-lucide="{{ c.icone }}" class="size-5"></i></span>
+      <div class="flex-1 min-w-0 text-sm">
+        <div class="flex items-center gap-2 font-semibold text-base">{{ c.titulo }}
+          <span class="size-6 rounded-full flex items-center justify-center {{ cores_estado[c.estado] }}" title="{{ {'ok': 'Em dia', 'aviso': 'Precisa de atenção', 'vazio': 'Não configurado'}[c.estado] }}"><i data-lucide="{{ icones_estado[c.estado] }}" class="size-3.5"></i></span>
+        </div>
+        {% for linha in c.linhas %}<p class="{{ 'text-warning' if c.estado == 'aviso' and loop.last and loop.length > 1 else 'text-ink-muted' }}">{{ linha }}</p>{% endfor %}
+      </div>
+      <i data-lucide="chevron-right" class="size-5 shrink-0 self-center text-ink-muted" aria-hidden="true"></i>
+    </a>
+    {% endfor %}
+  </div>
+
+{% elif aba == "preferencias" %}
+  <form method="post" action="/configuracoes/preferencias" class="{{ cartao_css }} p-5 space-y-5 text-sm">
+    <div class="space-y-2">
+      <h2 class="font-semibold">Teto de parcelas</h2>
+      <p class="text-ink-muted">Quanto, no máximo, as parcelas de cartão podem somar por mês. Os meses acima dele ficam marcados em Cartões › Parcelas.</p>
+      <label class="{{ rotulo_css }} w-48">Por mês<input data-mascara="reais" name="teto" value="{{ prefs.teto }}" inputmode="decimal" class="{{ campo }} text-right tabular-nums"></label>
+    </div>
+    <div class="space-y-2 border-t border-line pt-5">
+      <h2 class="font-semibold">Metas do 50/30/20</h2>
+      <p class="text-ink-muted">Quanto da receita vai para necessidades, desejos e investimento. As três somam 100%.</p>
+      <div class="flex flex-wrap gap-3">
+        {% for campo_meta, rotulo in [("necessidades", "Necessidades"), ("desejos", "Desejos"), ("terceira", "Investimento")] %}
+        <label class="{{ rotulo_css }} w-32">{{ rotulo }} (%)<input name="{{ campo_meta }}" value="{{ prefs[campo_meta] }}" inputmode="numeric" class="{{ campo }} text-right tabular-nums"></label>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="space-y-2 border-t border-line pt-5">
+      <h2 class="font-semibold">Tela inicial</h2>
+      <p class="text-ink-muted">Quais blocos aparecem no Dashboard e em que ordem.</p>
+      <a href="/#gerenciar" class="text-primary font-medium hover:underline">Personalizar a tela inicial →</a>
+    </div>
+    <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar preferências</button>
+  </form>
+
+{% elif aba == "categorias" %}
+  {% if sem_categoria %}
+  <form method="post" action="/configuracoes/categorizar" x-data="{ carregando: false }" @submit="carregando = true" class="mb-4 bg-card rounded-[20px] border border-warning/40 p-4 flex flex-wrap items-center gap-3 text-sm">
+    <i data-lucide="tags" class="size-5 text-warning"></i>
+    <span class="flex-1"><strong>{{ sem_categoria }}</strong> lançamento(s) sem categoria. Sem categoria, o painel 50/30/20 e a reserva de emergência ficam imprecisos.</span>
+    <button formaction="/configuracoes/categorizar/ia" class="inline-flex items-center gap-2 bg-primary-soft text-primary rounded-xl px-4 h-11 font-medium hover:opacity-80 transition-opacity duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="sparkles" class="size-4"></i><span x-text="carregando ? 'Aguarde…' : 'Categorizar com IA'">Categorizar com IA</span></button>
+    <button class="inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="wand-sparkles" class="size-4"></i>Categorizar automaticamente</button>
+  </form>
+  {% endif %}
+  {# categorizar com IA: métodos locais + IA por descrição; só vale depois de aplicar #}
+  {% if categorizacao %}
+  <form method="post" action="/configuracoes/categorizar/ia/aplicar" class="{{ cartao_css }} p-5 mb-6 space-y-4 text-sm">
+    <div>
+      <h2 class="font-semibold flex items-center gap-2"><i data-lucide="sparkles" class="size-4 text-primary"></i>Categorização sugerida</h2>
+      <p class="text-ink-muted">Uma linha por descrição, das mais caras para as mais baratas. Troque a categoria ou desmarque o que não quiser aplicar. Linhas com "＋ Criar" são categorias novas que a IA propõe (com pai, tipo e natureza); só são criadas se você aplicar. Ao aplicar, todos os lançamentos sem categoria com a mesma descrição são categorizados e o app aprende a regra para as próximas vezes.</p>
+    </div>
+    <ul class="divide-y divide-line">
+      {% for g in categorizacao.linhas %}
+        <li class="flex flex-wrap items-center gap-3 py-2">
+          <input type="checkbox" name="ok" value="{{ loop.index0 }}" {% if g.categoria_id or g.nova %}checked{% endif %} aria-label="Aplicar {{ g.descricao }}" class="{{ check_css }}">
+          <input type="hidden" name="tipo_{{ loop.index0 }}" value="{{ g.tipo }}"><input type="hidden" name="chave_{{ loop.index0 }}" value="{{ g.chave }}">
+          {% if g.nova %}<input type="hidden" name="nova_nome_{{ loop.index0 }}" value="{{ g.nova.nome }}"><input type="hidden" name="nova_pai_{{ loop.index0 }}" value="{{ g.nova.pai or '' }}"><input type="hidden" name="nova_grupo_{{ loop.index0 }}" value="{{ g.nova.grupo }}"><input type="hidden" name="nova_natureza_{{ loop.index0 }}" value="{{ g.nova.natureza }}">{% endif %}
+          <span class="flex-1 min-w-48"><span class="block font-medium truncate" title="{{ g.descricao }}">{{ g.descricao }}</span>
+            <span class="block text-xs text-ink-muted">{{ g.qtd }} lançamento(s) · {{ g.total|reais }}{% if g.tipo == "receita" %} · receita{% endif %}</span></span>
+          {% if g.origem %}<span class="rounded-full bg-page text-ink-muted text-xs px-2 leading-5">{{ {"ia": "IA", "regra": "regra", "historico": "histórico", "dica": "banco", "loja": "loja conhecida"}[g.origem] }}</span>{% endif %}
+          <div class="w-72">
+            {{ seletor_categoria("cat_" ~ loop.index0, "nova" if g.nova else (g.categoria_id or ""), g.tipo,
+                                 vazio="Deixar sem categoria", topo=[("nova", "＋ Criar: " ~ g.nova.rotulo)] if g.nova else [],
+                                 rotulo_aria="Categoria de " ~ g.descricao) }}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="flex gap-2">
+      <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Aplicar selecionadas</button>
+      <a href="/configuracoes?aba=categorias" class="inline-flex items-center px-4 h-11 rounded-xl text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer">Descartar</a>
+    </div>
+  </form>
+  {% endif %}
+
+  {# organizar com IA: a IA propõe pais e subcategorias; só vale depois de aplicar #}
+  {% if proposta %}
+  <form method="post" action="/configuracoes/categorias/organizar/aplicar" class="{{ cartao_css }} p-5 mb-6 space-y-4 text-sm">
+    <div>
+      <h2 class="font-semibold flex items-center gap-2"><i data-lucide="sparkles" class="size-4 text-primary"></i>Proposta da IA</h2>
+      <p class="text-ink-muted">Revise: troque o pai, o tipo e a natureza ou desmarque o que não quiser mudar. Os lançamentos acompanham a categoria. Antes de aplicar, o app faz um backup.</p>
+    </div>
+    <datalist id="pais-sugeridos">{% for n in pais_sugeridos %}<option value="{{ n }}">{% endfor %}</datalist>
+    <ul class="divide-y divide-line">
+      {% for i in proposta %}
+        <li class="flex flex-wrap items-center gap-3 py-2">
+          <input type="checkbox" name="aplicar" value="{{ i.categoria_id }}" checked aria-label="Aplicar {{ i.nome }}" class="{{ check_css }}">
+          <span class="font-medium w-52 truncate" title="{{ i.nome }}">{{ i.nome }}</span>
+          <label class="sr-only" for="pai_{{ i.categoria_id }}">Pai de {{ i.nome }}</label>
+          <input id="pai_{{ i.categoria_id }}" name="pai_{{ i.categoria_id }}" value="{{ i.pai or '' }}" list="pais-sugeridos" placeholder="Sem pai (fica na raiz)" class="{{ campo }} w-52">
+          <select name="grupo_{{ i.categoria_id }}" aria-label="Tipo de {{ i.nome }}" class="{{ campo }}">
+            {% for g, r in [("fixo", "Fixo"), ("variavel", "Variável"), ("divida", "Dívida")] %}<option value="{{ g }}" {% if i.grupo == g %}selected{% endif %}>{{ r }}</option>{% endfor %}
+          </select>
+          <select name="natureza_{{ i.categoria_id }}" aria-label="Natureza de {{ i.nome }}" class="{{ campo }}">
+            <option value="necessidade" {% if i.natureza == "necessidade" %}selected{% endif %}>Necessidade</option>
+            <option value="desejo" {% if i.natureza == "desejo" %}selected{% endif %}>Desejo</option>
+          </select>
+          {% if i.motivo %}<span class="text-xs text-ink-muted">{{ i.motivo }}</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="flex gap-2">
+      <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Aplicar selecionadas</button>
+      <a href="/configuracoes?aba=categorias" class="inline-flex items-center px-4 h-11 rounded-xl text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer">Descartar</a>
+    </div>
+  </form>
+  {% endif %}
+
+  {% include "configuracoes/_categorias.html" %}
+
+{% elif aba == "ia" %}
+  <section class="{{ cartao_css }} p-5 space-y-4 text-sm mb-6">
+    <h2 class="font-semibold">Qual IA usar para as categorias</h2>
+    <p class="text-ink-muted">Vale para "Organizar com IA" e "Categorizar com IA". A leitura de PDF de bancos desconhecidos na importação só funciona com a Anthropic.</p>
+    <form method="post" action="/configuracoes/ia/provedor" class="flex flex-wrap gap-3 items-end">
+      <label class="{{ rotulo_css }}">Provedor
+        <select name="provedor" class="{{ campo }}">
+          <option value="gemini" {% if ia_provedor == "gemini" %}selected{% endif %}>Gemini (Google)</option>
+          <option value="anthropic" {% if ia_provedor == "anthropic" %}selected{% endif %}>Anthropic (Claude)</option>
+        </select>
+      </label>
+      <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar</button>
+    </form>
+  </section>
+  <section class="{{ cartao_css }} p-5 space-y-4 text-sm mb-6">
+    <h2 class="font-semibold">Chave da API do Gemini</h2>
+    <p class="text-ink-muted">A chave fica no cofre de credenciais do Windows e não é mostrada de novo. Gere uma em aistudio.google.com.</p>
+    {% if gemini_ultimos4 %}
+      <p class="flex items-center gap-2 text-income"><i data-lucide="check-circle" class="size-4"></i>Chave configurada (termina em <span class="font-mono">{{ gemini_ultimos4 }}</span>)</p>
+    {% else %}
+      <p class="text-ink-muted">Nenhuma chave do Gemini guardada.</p>
+    {% endif %}
+    <form method="post" action="/configuracoes/ia/gemini/chave" class="flex flex-wrap gap-3 items-end" autocomplete="off">
+      <label class="{{ rotulo_css }} flex-1 min-w-64">{{ "Trocar a chave" if gemini_ultimos4 else "Chave" }}<input type="password" name="chave" required autocomplete="off" placeholder="AIza…" class="{{ campo }}"></label>
+      <button class="{{ botao }}"><i data-lucide="key-round" class="size-4"></i>Salvar chave</button>
+    </form>
+    {% if gemini_ultimos4 %}
+      <form method="post" action="/configuracoes/ia/gemini/chave/remover"><button class="{{ botao_perigo }}" onclick="return confirm('Remover a chave do Gemini?')"><i data-lucide="trash-2" class="size-4"></i>Remover chave</button></form>
+    {% endif %}
+    <form method="post" action="/configuracoes/ia/gemini/modelo" class="flex flex-wrap gap-3 items-end">
+      <label class="{{ rotulo_css }} flex-1 min-w-64">Modelo do Gemini<input name="modelo" value="{{ gemini_modelo }}" placeholder="{{ gemini_modelo_padrao }}" class="{{ campo }}"></label>
+      <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar modelo</button>
+    </form>
+    <p class="text-ink-muted">Padrão: {{ gemini_modelo_padrao }} (sempre aponta para o Flash mais novo). Deixe em branco para voltar ao padrão.</p>
+    <p class="text-ink-muted">Privacidade: só saem as descrições dos lançamentos, mascaradas (CPF, cartão, agência, conta, e-mail, telefone), e os nomes das categorias. Valores e datas não são enviados.</p>
+  </section>
+  <section class="{{ cartao_css }} p-5 space-y-4 text-sm mb-6">
+    <h2 class="font-semibold">Chave da API da Anthropic</h2>
+    <p class="text-ink-muted">A IA lê PDFs de bancos desconhecidos e sugere categorias. A chave fica no cofre de credenciais do Windows e não é mostrada de novo.</p>
+    {% if ia_ultimos4 %}
+      <p class="flex items-center gap-2 text-income"><i data-lucide="check-circle" class="size-4"></i>Chave configurada (termina em <span class="font-mono">{{ ia_ultimos4 }}</span>)</p>
+    {% else %}
+      <p class="text-ink-muted">Nenhuma chave guardada. Sem ela, o SDK tenta a variável de ambiente ANTHROPIC_API_KEY.</p>
+    {% endif %}
+    <form method="post" action="/configuracoes/ia/chave" class="flex flex-wrap gap-3 items-end" autocomplete="off">
+      <label class="{{ rotulo_css }} flex-1 min-w-64">{{ "Trocar a chave" if ia_ultimos4 else "Chave" }}<input type="password" name="chave" required autocomplete="off" placeholder="sk-ant-…" class="{{ campo }}"></label>
+      <button class="{{ botao }}"><i data-lucide="key-round" class="size-4"></i>Salvar chave</button>
+    </form>
+    {% if ia_ultimos4 %}
+      <form method="post" action="/configuracoes/ia/chave/remover"><button class="{{ botao_perigo }}" onclick="return confirm('Remover a chave guardada?')"><i data-lucide="trash-2" class="size-4"></i>Remover chave</button></form>
+    {% endif %}
+  </section>
+  <section class="{{ cartao_css }} p-5 space-y-4 text-sm">
+    <h2 class="font-semibold">Modelo</h2>
+    <form method="post" action="/configuracoes/ia/modelo" class="flex flex-wrap gap-3 items-end">
+      <label class="{{ rotulo_css }} flex-1 min-w-64">Modelo da IA<input name="modelo" value="{{ ia_modelo }}" placeholder="{{ ia_modelo_padrao }}" class="{{ campo }}"></label>
+      <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar modelo</button>
+    </form>
+    <p class="text-ink-muted">Padrão: {{ ia_modelo_padrao }}. Deixe em branco para voltar ao padrão.</p>
+    <p class="text-ink-muted">Privacidade: do texto do PDF saem mascarados CPF, número do cartão (exceto os 4 finais), agência e conta, e-mail e telefone. PDFs que são só imagem vão inteiros, sem mascaramento.</p>
+  </section>
+
+{% elif aba == "investimentos" %}
+  <section class="{{ cartao_css }} p-5 space-y-4 text-sm mb-6">
+    <h2 class="font-semibold">Token da brapi (opcional)</h2>
+    <p class="text-ink-muted">As cotações vêm do Yahoo Finance, sem chave. Com um token da brapi, ela entra como reserva para ativos da B3 quando o Yahoo falha. O token fica no cofre de credenciais do Windows e não é mostrado de novo.</p>
+    {% if brapi_ultimos4 %}
+      <p class="flex items-center gap-2 text-income"><i data-lucide="check-circle" class="size-4"></i>Token configurado (termina em <span class="font-mono">{{ brapi_ultimos4 }}</span>)</p>
+    {% else %}
+      <p class="text-ink-muted">Nenhum token guardado.</p>
+    {% endif %}
+    <form method="post" action="/configuracoes/investimentos/token" class="flex flex-wrap gap-3 items-end" autocomplete="off">
+      <label class="{{ rotulo_css }} flex-1 min-w-64">{{ "Trocar o token" if brapi_ultimos4 else "Token" }}<input type="password" name="token" required autocomplete="off" class="{{ campo }}"></label>
+      <button class="{{ botao }}"><i data-lucide="key-round" class="size-4"></i>Salvar token</button>
+    </form>
+    {% if brapi_ultimos4 %}
+      <form method="post" action="/configuracoes/investimentos/token/remover"><button class="{{ botao_perigo }}" onclick="return confirm('Remover o token guardado?')"><i data-lucide="trash-2" class="size-4"></i>Remover token</button></form>
+    {% endif %}
+  </section>
+  <section class="{{ cartao_css }} p-5 space-y-4 text-sm">
+    <h2 class="font-semibold">Histórico de cotações</h2>
+    <p class="text-ink-muted">Baixa de novo o fechamento mensal dos ativos, do câmbio e do Ibovespa, e as séries do CDI e do IPCA. Use se o histórico parecer incompleto.</p>
+    <form method="post" action="/configuracoes/investimentos/historico"><button class="{{ botao }}"><i data-lucide="refresh-cw" class="size-4"></i>Atualizar histórico</button></form>
+  </section>
+
+{% elif aba == "openfinance" and open_finance_ativo %}
+  <section class="{{ cartao_css }} p-5 space-y-3 text-sm mb-6">
+    <h2 class="font-semibold">Como conectar</h2>
+    <ol class="list-decimal pl-5 space-y-2 text-ink-muted">
+      <li>No <a href="https://meu.pluggy.ai" target="_blank" rel="noopener" class="text-primary underline">Meu Pluggy</a>, conecte Nubank, Itaú, C6 e Mercado Pago pelo fluxo oficial do Open Finance.</li>
+      <li>No <a href="https://dashboard.pluggy.ai" target="_blank" rel="noopener" class="text-primary underline">painel da Pluggy</a>, crie uma aplicação e copie o <strong>Client ID</strong> e o <strong>Client Secret</strong>.</li>
+      <li>Cole as chaves abaixo e adicione o <strong>ID de cada item</strong> (cada conexão do Meu Pluggy).</li>
+    </ol>
+    <p class="text-ink-muted">O app só lê dados. As chaves ficam no cofre de credenciais do Windows e não são mostradas de novo.</p>
+  </section>
+  <section class="{{ cartao_css }} p-5 space-y-4 text-sm mb-6">
+    <h2 class="font-semibold">Chaves da Pluggy</h2>
+    {% if of_ultimos4 %}
+      <p class="flex items-center gap-2 text-income"><i data-lucide="check-circle" class="size-4"></i>Chaves configuradas (Client ID termina em <span class="font-mono">{{ of_ultimos4 }}</span>)</p>
+    {% else %}
+      <p class="text-ink-muted">Nenhuma chave guardada.</p>
+    {% endif %}
+    <form method="post" action="/configuracoes/openfinance/chaves" class="flex flex-wrap gap-3 items-end" autocomplete="off">
+      <label class="{{ rotulo_css }} flex-1 min-w-64">Client ID<input type="text" name="client_id" required autocomplete="off" spellcheck="false" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" pattern="[0-9a-fA-F-]{36}" title="Formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" class="{{ campo }} font-mono"></label>
+      <label class="{{ rotulo_css }} flex-1 min-w-64">Client Secret<input type="password" name="client_secret" required autocomplete="new-password" class="{{ campo }}"></label>
+      <button class="{{ botao }}"><i data-lucide="key-round" class="size-4"></i>{{ "Trocar chaves" if of_ultimos4 else "Salvar chaves" }}</button>
+    </form>
+    {% if of_ultimos4 %}
+      <form method="post" action="/configuracoes/openfinance/chaves/remover"><button class="{{ botao_perigo }}" onclick="return confirm('Remover as chaves guardadas?')"><i data-lucide="trash-2" class="size-4"></i>Remover chaves</button></form>
+    {% endif %}
+  </section>
+  <section class="{{ cartao_css }} p-5 space-y-4 text-sm">
+    <h2 class="font-semibold">Itens (conexões do Meu Pluggy)</h2>
+    {% if of_itens %}
+      <ul class="divide-y divide-line">
+        {% for item_id in of_itens %}
+          {% set st = of_status.get(item_id) %}
+          <li class="py-3 flex flex-wrap items-start gap-x-4 gap-y-2">
+            <div class="flex-1 min-w-48">
+              <div class="font-medium">{{ st.nome if st and st.nome else "Item" }} <span class="font-mono text-xs text-ink-muted break-all">{{ item_id }}</span></div>
+              {% if st %}
+                {% if st.erro %}
+                  <div class="text-expense flex items-center gap-1.5"><i data-lucide="alert-circle" class="size-4"></i>{{ st.erro }}</div>
+                {% elif st.alertas %}
+                  {% for a in st.alertas %}<div class="text-warning flex items-center gap-1.5"><i data-lucide="alert-triangle" class="size-4"></i>{{ a }}</div>{% endfor %}
+                {% else %}
+                  <div class="text-income flex items-center gap-1.5"><i data-lucide="check-circle" class="size-4"></i>Conexão em dia{% if st.atualizado_em %} · atualizada em {{ st.atualizado_em[8:10] }}/{{ st.atualizado_em[5:7] }}/{{ st.atualizado_em[:4] }}{% endif %}</div>
+                {% endif %}
+              {% else %}
+                <div class="text-ink-muted">Ainda não testado.</div>
+              {% endif %}
+            </div>
+            <form method="post" action="/configuracoes/openfinance/itens/remover">
+              <input type="hidden" name="item_id" value="{{ item_id }}">
+              <button class="{{ botao_perigo }}" aria-label="Remover o item {{ item_id }}" onclick="return confirm('Remover este item?')"><i data-lucide="trash-2" class="size-4"></i>Remover</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-ink-muted">Nenhum item cadastrado.</p>
+    {% endif %}
+    <form method="post" action="/configuracoes/openfinance/itens" class="flex flex-wrap gap-3 items-end" autocomplete="off">
+      <label class="{{ rotulo_css }} flex-1 min-w-64">ID do item<input name="item_id" required placeholder="00000000-0000-0000-0000-000000000000" class="{{ campo }} font-mono"></label>
+      <button class="{{ botao }}"><i data-lucide="plus" class="size-4"></i>Adicionar item</button>
+    </form>
+    <form method="post" action="/configuracoes/openfinance/testar"><button class="{{ botao }}"><i data-lucide="plug-zap" class="size-4"></i>Testar conexão</button></form>
+  </section>
+
+{% elif aba == "backup" %}
+  <section class="{{ cartao_css }} p-5 space-y-4 text-sm">
+    <form method="post" action="/configuracoes/backup/pasta" class="flex flex-wrap gap-3 items-end">
+      <label class="{{ rotulo_css }} flex-1 min-w-64">Pasta de backup<input name="pasta" value="{{ pasta_backup }}" class="{{ campo }}"></label>
+      <button class="{{ botao }}"><i data-lucide="folder-check" class="size-4"></i>Salvar pasta</button>
+    </form>
+    {% if backup_disponivel %}
+      <form method="post" action="/configuracoes/backup"><button class="{{ botao }}"><i data-lucide="database-backup" class="size-4"></i>Fazer backup agora</button></form>
+    {% endif %}
+    <h2 class="font-semibold pt-2">Backups ({{ backups|length }} de no máximo 30)</h2>
+    <ul class="divide-y divide-line">
+      {% for nome in backups %}
+        <li class="flex flex-wrap justify-between items-center gap-2 py-1">
+          <span class="font-mono">{{ nome }}</span>
+          <form method="post" action="/configuracoes/backup/restaurar">
+            <input type="hidden" name="arquivo" value="{{ nome }}">
+            <button class="{{ botao_perigo }}" aria-label="Restaurar o backup {{ nome }}" onclick="return confirm('Restaurar este backup? Os dados atuais serão substituídos.')"><i data-lucide="rotate-ccw" class="size-4"></i>Restaurar</button>
+          </form>
+        </li>
+      {% else %}
+        <li class="py-2 text-ink-muted">Nenhum backup encontrado nesta pasta.</li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}
+</div>
+</div>
+{% endblock %}

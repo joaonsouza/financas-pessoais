@@ -1,0 +1,13 @@
+{# Uma linha da árvore de categorias. Variáveis: c, nivel (0 mãe, 1 filha), tem_filhas, uso, cat_sel, base_url. #}
+{% set qtd, total = uso.get(c.id, (0, 0)) %}
+{% set selecionada = cat_sel and cat_sel.id == c.id %}
+<a href="{{ base_url }}&cat={{ c.id }}" {% if selecionada %}aria-current="true"{% endif %}
+   draggable="{{ 'false' if tem_filhas else 'true' }}" @dragstart="arrastar({{ c.id }}, $event)" @dragend="arrastando = null; alvo = null"
+   {% if nivel == 0 %}@dragover.prevent="alvo = {{ c.id }}" @dragleave="alvo = null" @drop.prevent="soltar({{ c.id }})"
+   :class="arrastando && arrastando !== {{ c.id }} && alvo === {{ c.id }} ? 'ring-2 ring-primary' : ''"{% endif %}
+   class="flex items-center gap-2 mx-1 px-3 min-h-11 rounded-xl cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 {{ 'pl-9' if nivel else '' }} {{ 'bg-primary-soft' if selecionada else 'hover:bg-page' }} {{ 'opacity-50' if not c.ativa else '' }}">
+  {% if not tem_filhas %}<span class="hidden lg:inline text-ink-muted cursor-grab select-none" title="Arraste para outra categoria-mãe" aria-hidden="true">⠿</span>{% endif %}
+  <span class="size-3 rounded-full shrink-0" style="background: {{ c.cor }}"></span>
+  <span class="flex-1 min-w-0 truncate {{ 'font-medium' if nivel == 0 else '' }}">{{ c.nome }}{% if not c.ativa %} <span class="text-xs text-ink-muted">(inativa)</span>{% endif %}</span>
+  <span class="text-xs text-ink-muted tabular-nums whitespace-nowrap" title="Lançamentos efetivados e total nos últimos 12 meses">{{ qtd }} · {{ total|reais if qtd else "—" }}</span>
+</a>

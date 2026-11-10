@@ -1,0 +1,122 @@
+{% from "_seletor_categoria.html" import seletor_categoria with context %}
+{# Formulário de meta (criar/editar). Variáveis: m (Meta ou None), acao, contas, icones, cores, gasto_essencial; voltar="detalhe" volta para o detalhe;
+   aporte_pre (centavos, opcional) vem com "guardar todo mês" marcado, valor fixo e esse valor. #}
+{% set pre = aporte_pre if aporte_pre is defined and aporte_pre else None %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set rotulo_css = "flex flex-col gap-1 text-sm font-medium text-ink-muted" %}
+{% set check_css = "size-5 rounded accent-[var(--c-primary)] cursor-pointer" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+<form method="post" action="{{ acao }}"
+      x-data="{ tipo: '{{ m.tipo if m else 'objetivo' }}', pagar: {{ 'true' if pre or (m and m.pagar_primeiro) else 'false' }}, aporte: '{{ 'automatico' if not pre and m and m.aporte_automatico else 'fixo' }}', comoDespesa: {{ 'true' if m and m.aporte_como_despesa else 'false' }},
+                icone: '{{ m.icone if m else 'target' }}', cor: '{{ m.cor if m else '#10b981' }}',
+                mult: '{{ m.multiplicador_reserva if m else 3 }}', essencial: {{ gasto_essencial }},
+                temConta: {{ 'true' if m and m.conta_id else 'false' }} }"
+      class="flex flex-wrap items-end gap-3">
+  {% if voltar is defined and voltar %}<input type="hidden" name="voltar" value="{{ voltar }}">{% endif %}
+  {% if mes is defined and mes %}<input type="hidden" name="mes" value="{{ mes }}">{% endif %}
+  <label class="{{ rotulo_css }}">Nome<input name="nome" value="{{ m.nome if m else '' }}" required maxlength="80" class="{{ campo }}"></label>
+  <label class="{{ rotulo_css }}">Tipo
+    <select name="tipo" x-model="tipo" class="{{ campo }}">
+      {% for chave, rotulo in tipos.items() %}<option value="{{ chave }}" {% if m and m.tipo == chave %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="{{ rotulo_css }}" x-show="tipo === 'objetivo'">Horizonte
+    <select name="horizonte" class="{{ campo }}">
+      {% for chave, rotulo in horizontes.items() %}<option value="{{ chave }}" {% if (m.horizonte if m else 'ano') == chave %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="{{ rotulo_css }}">
+    <span x-text="tipo === 'economia_mensal' ? 'Economizar por mês' : (tipo === 'reserva_emergencia' ? 'Valor alvo (teto)' : 'Valor alvo')">Valor alvo</span>
+    <input data-mascara="reais" name="valor_alvo" value="{{ m.valor_alvo|reais_input if m and m.valor_alvo else '' }}" inputmode="decimal"
+           :placeholder="tipo === 'reserva_emergencia' ? (essencial * mult / 100).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0,00'"
+           placeholder="0,00" class="{{ campo }} w-36 text-right tabular-nums">
+  </label>
+  <label class="{{ rotulo_css }}" x-show="tipo === 'reserva_emergencia'">Meses de cobertura
+    <select name="multiplicador_reserva" x-model="mult" class="{{ campo }}">
+      <option value="3" {% if not m or m.multiplicador_reserva != 6 %}selected{% endif %}>3 meses (renda estável)</option>
+      <option value="6" {% if m and m.multiplicador_reserva == 6 %}selected{% endif %}>6 meses (renda variável)</option>
+    </select>
+  </label>
+  <p class="w-full -mt-1 text-xs text-ink-muted" x-show="tipo === 'reserva_emergencia'" x-cloak>
+    Sugestão: gasto essencial ({{ gasto_essencial|reais }}/mês) × <span x-text="mult"></span> meses =
+    <span class="font-medium text-ink tabular-nums" x-text="'R$ ' + (essencial * mult / 100).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></span>.
+    Deixe o valor alvo vazio para usar a sugestão, ou informe o seu teto.
+  </p>
+  {% if carteiras|length > 1 %}
+  <label class="{{ rotulo_css }}" x-show="tipo === 'reserva_emergencia'" x-cloak>Aparece na carteira
+    <select name="carteira_id" class="{{ campo }}">
+      <option value="">Só na consolidada</option>
+      {% for c in carteiras %}<option value="{{ c.id }}" {% if m and m.carteira_id == c.id %}selected{% endif %}>{{ c.nome }} e na consolidada</option>{% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  <label class="{{ rotulo_css }}" x-show="tipo === 'objetivo'">Prazo<input type="date" name="prazo" value="{{ m.prazo.isoformat() if m and m.prazo else '' }}" class="{{ campo }}"></label>
+  <label class="{{ rotulo_css }}" x-show="tipo !== 'economia_mensal'">Onde o dinheiro fica
+    <select name="conta_id" class="{{ campo }}" @change="temConta = $event.target.value !== ''">
+      <option value="">Fora do app (guardar vira despesa)</option>
+      {% for c in contas %}<option value="{{ c.id }}" {% if m and m.conta_id == c.id %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+    </select>
+  </label>
+  {# com conta, o "já tem" só vale ao criar a caixinha; depois o saldo dela é o que vale (mexe-se na tela da conta) #}
+  <label class="{{ rotulo_css }}" x-show="tipo !== 'economia_mensal' && (!temConta || {{ 'false' if m and m.conta_id else 'true' }})">
+    <span x-text="temConta ? 'Já tem guardado (soma na conta)' : 'Já guardado'">Já guardado</span>
+    <input data-mascara="reais" name="valor_manual" value="{{ m.valor_manual|reais_input if m and m.valor_manual is not none and not m.conta_id else '' }}" inputmode="decimal"
+           :placeholder="temConta ? 'vazio = todo o Livre' : '0,00'" placeholder="0,00" class="{{ campo }} w-40 text-right tabular-nums"></label>
+  <p class="w-full -mt-1 text-xs text-ink-muted" x-show="tipo !== 'economia_mensal'" x-cloak
+     x-text="temConta ? 'O dinheiro fica numa caixinha com o nome do objetivo dentro da conta; guardar vira transferência para ela nos lançamentos.' : 'Cada valor guardado vira uma despesa na categoria Objetivos (sai do saldo); retirar vira receita.'"></p>
+
+  <fieldset class="w-full flex flex-wrap items-center gap-x-6 gap-y-3" x-show="tipo !== 'economia_mensal'">
+    <legend class="sr-only">Aparência</legend>
+    <div class="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Ícone">
+      <span class="text-sm font-medium text-ink-muted mr-1">Ícone</span>
+      {% for i in icones %}
+        <label class="size-9 rounded-full flex items-center justify-center cursor-pointer border transition-colors duration-150"
+               :class="icone === '{{ i }}' ? 'border-transparent text-white' : 'border-line text-ink-muted hover:text-ink'"
+               :style="icone === '{{ i }}' ? 'background:' + cor : ''">
+          <input type="radio" name="icone" value="{{ i }}" x-model="icone" class="sr-only" {% if (m.icone if m else 'target') == i %}checked{% endif %}>
+          <i data-lucide="{{ i }}" class="size-4" aria-hidden="true"></i><span class="sr-only">{{ i }}</span>
+        </label>
+      {% endfor %}
+    </div>
+    <div class="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Cor">
+      <span class="text-sm font-medium text-ink-muted mr-1">Cor</span>
+      {% for c in cores %}
+        <label class="size-7 rounded-full cursor-pointer ring-offset-2 ring-offset-card" style="background: {{ c }}" :class="cor === '{{ c }}' && 'ring-2 ring-ink'">
+          <input type="radio" name="cor" value="{{ c }}" x-model="cor" class="sr-only" {% if (m.cor if m else '#10b981') == c %}checked{% endif %}><span class="sr-only">{{ c }}</span>
+        </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <div class="w-full space-y-3" x-show="tipo !== 'economia_mensal'">
+    <label class="flex items-center gap-2 min-h-11 cursor-pointer text-sm"><input type="checkbox" name="pagar_primeiro" x-model="pagar" {% if pre or (m and m.pagar_primeiro) %}checked{% endif %} class="{{ check_css }}"> Guardar todo mês (aporte automático nos lançamentos)</label>
+    <div class="space-y-3 pl-7" x-show="pagar" x-cloak>
+      {# automático depende do prazo, que só o objetivo tem: fora dele, o aporte é sempre o valor fixo #}
+      <fieldset class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm" x-show="tipo === 'objetivo'">
+        <legend class="sr-only">Quanto guardar por mês</legend>
+        <label class="flex items-center gap-2 min-h-11 cursor-pointer"><input type="radio" name="aporte" value="fixo" x-model="aporte" class="size-5 accent-[var(--c-primary)]"> Valor fixo</label>
+        <label class="flex items-center gap-2 min-h-11 cursor-pointer"><input type="radio" name="aporte" value="automatico" x-model="aporte" class="size-5 accent-[var(--c-primary)]"> Automático: o que falta ÷ meses até o prazo</label>
+      </fieldset>
+      <div class="flex flex-wrap items-end gap-3">
+        <label class="{{ rotulo_css }}">Sai de
+          <select name="conta_origem_id" class="{{ campo }}">
+            <option value="">Escolha…</option>
+            {% for c in contas %}<option value="{{ c.id }}" {% if m and m.conta_origem_id == c.id %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="{{ rotulo_css }}">Dia<input name="dia_pagar" value="{{ m.dia_pagar or '' if m else '' }}" inputmode="numeric" class="{{ campo }} w-24"></label>
+        <label class="{{ rotulo_css }}" x-show="aporte === 'fixo' || tipo !== 'objetivo'">Valor por mês<input data-mascara="reais" name="valor_mensal_pagar" value="{{ pre|reais_input if pre else (m.valor_mensal_pagar|reais_input if m and m.valor_mensal_pagar else '') }}" inputmode="decimal" placeholder="0,00" class="{{ campo }} w-32 text-right tabular-nums"></label>
+      </div>
+      <label class="flex items-center gap-2 min-h-11 cursor-pointer text-sm" x-show="tipo === 'objetivo'"><input type="checkbox" name="repete_anual" {% if m and m.repete_anual %}checked{% endif %} class="{{ check_css }}"> Repete todo ano (IPTU, IPVA, seguro…): passado o prazo, recomeça no ano seguinte</label>
+      <div class="flex flex-wrap items-end gap-3" x-show="temConta">
+        <label class="flex items-center gap-2 min-h-11 cursor-pointer text-sm"><input type="checkbox" name="aporte_como_despesa" x-model="comoDespesa" {% if m and m.aporte_como_despesa %}checked{% endif %} class="{{ check_css }}"> Conta como despesa enquanto pendente</label>
+        <div class="{{ rotulo_css }}" x-show="comoDespesa">Categoria
+          {{ seletor_categoria("categoria_id", m.categoria_id if m else "", "despesa", criar=true) }}
+        </div>
+      </div>
+      <p class="text-xs text-ink-muted" x-show="comoDespesa && temConta">O aporte do mês aparece como despesa (no orçamento e no previsto) e, ao marcar como pago, vira a transferência para a caixinha da meta.</p>
+    </div>
+  </div>
+  {% if m %}<label class="flex items-center gap-2 min-h-11 cursor-pointer text-sm"><input type="checkbox" name="ativa" {% if m.ativa %}checked{% endif %} class="{{ check_css }}"> Ativa</label>{% endif %}
+  <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>{{ "Salvar" if m else "Criar meta" }}</button>
+</form>

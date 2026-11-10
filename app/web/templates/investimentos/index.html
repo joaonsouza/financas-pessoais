@@ -1,0 +1,560 @@
+{% extends "base.html" %}
+{% block titulo %}Investimentos{% endblock %}
+{% block cabecalho %}Investimentos{% endblock %}
+{% block conteudo %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set botao_suave = "inline-flex items-center gap-2 bg-primary-soft text-primary rounded-xl px-4 h-11 font-medium hover:opacity-80 transition-opacity duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set seletor = "h-10 rounded-xl border border-line bg-card px-3 text-sm text-ink cursor-pointer focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set campo_meta = "h-8 w-16 rounded-lg border border-line bg-card px-2 text-right text-sm tabular-nums text-ink focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set icone_btn = "size-9 rounded-xl inline-flex items-center justify-center text-ink-muted hover:text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% macro sinal(valor) %}{{ 'text-income' if valor > 0 else ('text-expense' if valor < 0 else 'text-ink-muted') }}{% endmacro %}
+{# Chip de rentabilidade: verde/vermelho com seta; None vira travessão neutro. #}
+{% macro chip(rotulo, valor) %}
+  {% set cor = 'bg-page text-ink-muted' if valor is none else ('bg-income/10 text-income' if valor >= 0 else 'bg-expense/10 text-expense') %}
+  <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold tabular-nums {{ cor }}">
+    <span class="text-xs font-medium opacity-80">{{ rotulo }}</span>
+    {% if valor is not none %}<i data-lucide="{{ 'trending-up' if valor >= 0 else 'trending-down' }}" class="size-3.5"></i>{% endif %}{{ valor|pct }}
+  </span>
+{% endmacro %}
+
+{% set q_carteira = ("carteira=" ~ carteira_sel.id) if carteira_sel else "" %}
+{# carteiras: cada uma com a sua estratégia; a consolidada soma todas (metas ponderadas pelo patrimônio de cada uma) #}
+<div x-data="{ editar: null }" class="flex flex-wrap items-center gap-2 mb-4">
+  <label class="inline-flex items-center gap-2 text-sm text-ink-muted">
+    <i data-lucide="briefcase" class="size-4"></i><span class="sr-only">Carteira</span>
+    <select onchange="location.href = '/investimentos' + (this.value ? '?carteira=' + this.value : '')"
+            class="h-10 min-w-56 rounded-xl border border-line bg-card px-3 text-sm font-medium text-ink cursor-pointer focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150">
+      {% if carteiras|length > 1 %}<option value=""{% if not carteira_sel %} selected{% endif %}>Consolidada (todas)</option>{% endif %}
+      {% for c in carteiras %}<option value="{{ c.id }}"{% if carteira_sel and carteira_sel.id == c.id %} selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+    </select>
+  </label>
+  {% if carteira_sel %}
+  <button type="button" @click="editar = 'atual'" class="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-sm text-ink-muted hover:bg-card hover:text-primary cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="pencil" class="size-4"></i>Editar carteira</button>
+  {% endif %}
+  <button type="button" @click="editar = 'nova'" class="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-sm text-ink-muted hover:bg-card hover:text-primary cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="plus" class="size-4"></i>Nova carteira</button>
+
+  <div x-show="editar" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="editar = null">
+    <form method="post" action="/investimentos/carteiras" @click.outside="editar = null" role="dialog" aria-modal="true" aria-labelledby="titulo-carteira"
+          class="w-full max-w-md bg-card rounded-[20px] border border-line shadow-2xl p-6 space-y-4">
+      <h2 id="titulo-carteira" class="text-lg font-semibold" x-text="editar === 'nova' ? 'Nova carteira' : 'Editar carteira'">Carteira</h2>
+      <input type="hidden" name="id" :value="editar === 'atual' ? '{{ carteira_sel.id if carteira_sel else '' }}' : ''">
+      <label class="block">
+        <span class="text-sm font-medium text-ink-muted">Nome</span>
+        <input name="nome" required maxlength="80" :value="editar === 'atual' ? {{ (carteira_sel.nome if carteira_sel else '')|tojson|forceescape }} : ''"
+               class="w-full h-11 rounded-xl border border-line bg-card px-3 text-ink focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary">
+      </label>
+      <fieldset>
+        <legend class="text-sm font-medium text-ink-muted mb-1">Contas de investimento desta carteira</legend>
+        <p class="text-xs text-ink-muted mb-2">Operações guardadas nessas contas já vêm com esta carteira escolhida (dá para trocar em cada operação).</p>
+        <div class="grid grid-cols-2 gap-2 text-sm">
+          {% for conta in contas_invest_todas %}
+          <label class="inline-flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="contas" value="{{ conta.id }}" class="size-4 accent-primary cursor-pointer"
+                   :checked="editar === 'atual' && {{ ((carteira_sel and conta.id in contas_da_carteira[carteira_sel.id]) and 'true' or 'false') }}">{{ conta.nome }}
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <div class="flex justify-end gap-2">
+        <button type="button" @click="editar = null" class="h-11 px-4 rounded-xl text-ink-muted hover:bg-page cursor-pointer">Cancelar</button>
+        <button class="h-11 px-5 rounded-xl bg-primary text-white font-medium hover:bg-primary-strong cursor-pointer">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="flex flex-wrap items-center gap-3 mb-6">
+  <button type="button" hx-get="/investimentos/operacoes/nova{{ ('?carteira_id=' ~ carteira_sel.id) if carteira_sel and not carteira_sel.padrao }}" hx-target="#modal" class="{{ botao }}"><i data-lucide="plus" class="size-4"></i>Operação</button>
+  <a href="/investimentos/rebalancear{{ '?' ~ q_carteira if q_carteira }}" class="{{ botao_suave }}"><i data-lucide="scale" class="size-4"></i>Rebalancear</a>
+  <a href="/investimentos/lancamentos{{ '?' ~ q_carteira if q_carteira }}" class="{{ botao_suave }}"><i data-lucide="list" class="size-4"></i>Lançamentos</a>
+  <a href="/investimentos/irpf{{ '?' ~ q_carteira if q_carteira }}" class="{{ botao_suave }}"><i data-lucide="file-text" class="size-4"></i>IRPF</a>
+  <a href="/investimentos/darf" class="{{ botao_suave }}"><i data-lucide="receipt" class="size-4"></i>DARF</a>
+  {% if importar_planilha_ativo %}<a href="/investimentos/importar-planilha" class="{{ botao_suave }}"><i data-lucide="file-spreadsheet" class="size-4"></i>Importar da planilha</a>{% endif %}
+  <div class="ml-auto flex items-center gap-3">
+    <span class="text-xs text-ink-muted">{% if ultima_atualizacao %}Cotações de {{ ultima_atualizacao.strftime("%d/%m %H:%M") }}{% else %}Sem cotações em cache{% endif %}</span>
+    <button type="button" hx-post="/investimentos/atualizar" hx-swap="none" hx-disabled-elt="this" class="{{ botao_suave }}">
+      <i data-lucide="refresh-cw" class="size-4"></i>Atualizar cotações
+    </button>
+  </div>
+</div>
+
+{% if desatualizados %}
+  <div role="alert" class="mb-6 rounded-xl bg-warning/10 border border-warning/30 text-warning px-4 py-3 flex items-start gap-2">
+    <i data-lucide="alert-triangle" class="size-5 shrink-0 mt-0.5"></i>
+    <span>Alguns ativos estão com cotação desatualizada (o provedor falhou na última tentativa). Os valores usam o último preço em cache.</span>
+  </div>
+{% endif %}
+{% if sem_cotacao %}
+  <div role="status" class="mb-6 rounded-xl bg-primary-soft text-primary px-4 py-3 flex items-start gap-2">
+    <i data-lucide="info" class="size-5 shrink-0 mt-0.5"></i>
+    <span>Há ativos sem cotação: eles entram pelo custo. Clique em "Atualizar cotações" ou informe um preço manual na página do ativo.</span>
+  </div>
+{% endif %}
+
+{% if not carteira.classes %}
+  <section class="{{ cartao_css }} p-8 text-center space-y-3">
+    <i data-lucide="trending-up" class="size-8 text-ink-muted mx-auto"></i>
+    <p class="font-medium">Nenhum investimento cadastrado.</p>
+    <p class="text-sm text-ink-muted">Registre uma operação{% if importar_planilha_ativo %} ou importe as posições da planilha{% endif %}.</p>
+  </section>
+  {% include "investimentos/_reserva.html" %}
+  {% include "investimentos/_oportunidade.html" %}
+{% else %}
+
+{# ---------- cards de topo ---------- #}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+  <div class="bg-primary text-white rounded-[20px] shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5">
+    <div class="text-sm text-white/80">Patrimônio total</div>
+    <div class="mt-2 flex flex-wrap items-baseline gap-2">
+      <span class="text-3xl font-semibold tabular-nums">{{ cards.patrimonio|reais }}</span>
+      <span class="rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold tabular-nums">{{ cards.variacao_pct|pct }}</span>
+    </div>
+    <div class="text-sm text-white/80 tabular-nums mt-2">Valor investido <span class="font-medium text-white">{{ cards.investido|reais }}</span></div>
+    {# com a reserva de emergência, só o total com ela (a reserva tem bloco próprio); sem, o saldo da de oportunidade #}
+    {% if carteira.reserva %}
+    <div class="text-sm text-white/80 tabular-nums mt-0.5">Patrimônio com {{ "as reservas" if carteira.oportunidade else "a reserva" }} <span class="font-medium text-white">{{ carteira.patrimonio_com_reserva|reais }}</span></div>
+    {% else %}
+    <div class="text-sm text-white/80 tabular-nums mt-0.5">Reserva de oportunidade <span class="font-medium text-white">{{ carteira.oportunidade_saldo|reais }}</span> <span class="text-xs text-white/70">(fora da alocação)</span></div>
+    {% endif %}
+    {% if no_mes %}{# o mês corrente contra o fechamento do anterior: o que entrou e o que rendeu #}
+    <div class="mt-4 pt-3 border-t border-white/20 text-sm tabular-nums">
+      <div class="text-white/80">Neste mês</div>
+      <div class="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-white/80">
+        <span>{{ "Resgates" if no_mes.aportes < 0 else "Aportes" }} <span class="font-medium text-white">{{ (no_mes.aportes|abs)|reais }}</span></span>
+        <span>Rendimento <span class="font-medium text-white">{{ "+" if no_mes.rendimento > 0 }}{{ no_mes.rendimento|reais }}</span> <span class="text-xs">({{ "+" if no_mes.rent_pct > 0 }}{{ no_mes.rent_pct|pct }})</span></span>
+      </div>
+    </div>
+    {% endif %}
+    {% if composicao %}
+    <div class="mt-3">
+      <div class="flex h-2 rounded-full overflow-hidden bg-white/20" role="img" aria-label="Composição: {% for f in composicao %}{{ f.rotulo }} {{ f.pct|pct(0) }}{{ ', ' if not loop.last }}{% endfor %}">
+        {% for f in composicao %}<span style="width: {{ f.pct }}%; background: {{ f.cor }}"></span>{% endfor %}
+      </div>
+      <div class="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-white/80 tabular-nums">
+        {% for f in composicao %}<span class="inline-flex items-center gap-1"><span class="size-2 rounded-full ring-1 ring-white/40" style="background: {{ f.cor }}"></span>{{ f.rotulo }} {{ "<1%" if f.pct < 1 else f.pct|pct(0) }}</span>{% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <div class="{{ cartao_css }} p-5">
+    <div class="text-sm text-ink-muted">Ganho de capital</div>
+    <div class="mt-2 text-2xl font-semibold tabular-nums {{ sinal(cards.ganho) }}">{{ cards.ganho|reais }}</div>
+    <div class="text-xs text-ink-muted tabular-nums mt-1">patrimônio − investido · lucro realizado {{ carteira.lucro_realizado|reais }}</div>
+    {% if dia %}
+    <div class="mt-4 pt-3 border-t border-line">
+      <div class="text-sm text-ink-muted">Variação do dia</div>
+      <div class="mt-1 flex flex-wrap items-baseline gap-2 tabular-nums {{ sinal(dia[0]) }}">
+        <span class="text-xl font-semibold">{{ "+" if dia[0] > 0 }}{{ dia[0]|reais }}</span>
+        <span class="text-sm font-medium">{{ "+" if dia[1] > 0 }}{{ dia[1]|pct }}</span>
+      </div>
+      <div class="text-xs text-ink-muted mt-0.5">contra o fechamento anterior · renda fixa pelo último dia útil</div>
+    </div>
+    {% endif %}
+  </div>
+  <div class="{{ cartao_css }} p-5">
+    <div class="text-sm text-ink-muted">Rentabilidade</div>
+    <div class="mt-2 flex flex-wrap gap-2">
+      {{ chip("12M", cards.rent_12m_pct) }}
+      {{ chip("Total", cards.rent_total_pct) }}
+      {% if mercado.ipca_12m_pct is not none %}<span title="Rentabilidade de 12 meses acima do IPCA de 12 meses">{{ chip("Real 12M", real_12m) }}</span>{% endif %}
+    </div>
+    {% if mercado.cdi_12m_pct is not none or mercado.ipca_12m_pct is not none %}<div class="text-xs text-ink-muted tabular-nums mt-2">12M contra CDI {{ mercado.cdi_12m_pct|pct }} · IPCA {{ mercado.ipca_12m_pct|pct }}{% if mercado.ipca_ate %} <span title="Último IPCA divulgado">(até {{ mercado.ipca_ate.strftime("%m/%y") }})</span>{% endif %}</div>{% endif %}
+    {% if cards.rent_total_simples %}<div class="text-xs text-ink-muted mt-2" title="Sem histórico mensal suficiente para a rentabilidade ponderada pelos aportes">Total simples, desde o custo (patrimônio ÷ investido)</div>{% endif %}
+    {% if ultima %}<div class="text-xs text-ink-muted tabular-nums mt-0.5">Total contra CDI {{ ultima.cdi_acum_pct|pct }} · Ibovespa {{ ultima.ibov_acum_pct|pct }}{% if ultima.global_acum_pct is not none %} · Global {{ ultima.global_acum_pct|pct }}{% endif %}</div>{% endif %}
+    {# mercado hoje: Ibovespa e dólar com a variação do dia; CDI na taxa de hoje, ao ano #}
+    <dl class="mt-4 pt-3 border-t border-line grid grid-cols-3 gap-2 text-xs tabular-nums">
+      {% for rotulo, valor, var in [("Ibovespa", ("{:,.0f}".format(mercado.ibov)|replace(",", ".")) if mercado.ibov else none, mercado.ibov_var_pct),
+                                   ("Dólar", ("R$ " ~ ("%.4f"|format(mercado.dolar))|replace(".", ",")) if mercado.dolar else none, mercado.dolar_var_pct),
+                                   ("CDI", (mercado.cdi_aa_pct|pct ~ " a.a.") if mercado.cdi_aa_pct is not none else none, none)] %}
+      <div class="min-w-0">
+        <dt class="text-ink-muted">{{ rotulo }}</dt>
+        <dd class="font-semibold text-ink text-sm truncate">{{ valor or "—" }}</dd>
+        {% if var is not none %}<dd class="font-medium {{ sinal(var) }}">{{ "+" if var > 0 }}{{ var|pct }}</dd>{% endif %}
+      </div>
+      {% endfor %}
+    </dl>
+  </div>
+</div>
+
+{# ---------- evolução empilhada + rosca ---------- #}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+  <section class="{{ cartao_css }} p-5 lg:col-span-2 min-w-0">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <h2 class="font-semibold">Evolução do patrimônio</h2>
+      <form method="get" action="/investimentos" class="flex flex-wrap gap-2">
+        <input type="hidden" name="rosca" value="{{ filtros.rosca }}">
+        <input type="hidden" name="periodo_rent" value="{{ filtros.periodo_rent }}">
+        {% if carteira_sel %}<input type="hidden" name="carteira" value="{{ carteira_sel.id }}">{% endif %}
+        <label class="sr-only" for="filtro-periodo">Período</label>
+        <select id="filtro-periodo" name="periodo" onchange="this.form.submit()" class="{{ seletor }}">
+          {% for valor, rotulo in periodos.items() %}<option value="{{ valor }}"{% if filtros.periodo == valor %} selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+        </select>
+        <label class="sr-only" for="filtro-classe">Alocação</label>
+        <select id="filtro-classe" name="classe" onchange="this.form.submit()" class="{{ seletor }}">
+          <option value="">Todos os tipos</option>
+          {% for c in classes %}<option value="{{ c }}"{% if filtros.classe == c %} selected{% endif %}>{{ rotulos_classe[c] }}</option>{% endfor %}
+        </select>
+        <noscript><button class="{{ botao_suave }}">Filtrar</button></noscript>
+      </form>
+    </div>
+    {% if barras.rotulos %}
+      <div class="relative h-72"><canvas id="grafico-evolucao" role="img" aria-label="Valor aplicado e ganho de capital por mês"></canvas></div>
+    {% else %}
+      <p class="text-sm text-ink-muted">Sem histórico {{ "nesta alocação" if filtros.classe else "ainda" }}.</p>
+    {% endif %}
+  </section>
+
+  <section class="{{ cartao_css }} p-5 min-w-0">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <h2 class="font-semibold">Ativos na carteira</h2>
+      <form method="get" action="/investimentos">
+        <input type="hidden" name="periodo" value="{{ filtros.periodo }}">
+        <input type="hidden" name="periodo_rent" value="{{ filtros.periodo_rent }}">
+        {% if carteira_sel %}<input type="hidden" name="carteira" value="{{ carteira_sel.id }}">{% endif %}
+        <input type="hidden" name="classe" value="{{ filtros.classe }}">
+        <label class="sr-only" for="filtro-rosca">Tipo de ativo</label>
+        <select id="filtro-rosca" name="rosca" onchange="this.form.submit()" class="{{ seletor }}">
+          <option value="">Todas as classes</option>
+          {% for c in carteira.classes %}<option value="{{ c.classe }}"{% if filtros.rosca == c.classe %} selected{% endif %}>{{ rotulos_classe[c.classe] }}</option>{% endfor %}
+        </select>
+        <noscript><button class="{{ botao_suave }}">Filtrar</button></noscript>
+      </form>
+    </div>
+    {% if fatias %}
+      <div class="relative size-44 mx-auto"><canvas id="grafico-alocacao" role="img" aria-label="Distribuição {{ ('dos ativos de ' ~ rotulos_classe[filtros.rosca]) if filtros.rosca else 'por classe' }}"></canvas></div>
+      <ul class="mt-4 space-y-2 text-sm">
+        {% for f in fatias %}
+          <li class="flex items-center justify-between gap-3">
+            <span class="flex items-center gap-2 min-w-0"><span class="size-2.5 rounded-full shrink-0" style="background: {{ f.cor }}"></span><span class="truncate">{{ f.rotulo }}</span></span>
+            <span class="tabular-nums shrink-0">{{ f.pct|pct(1) }} <span class="text-ink-muted text-xs">{{ f.valor|reais }}</span></span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-sm text-ink-muted">Sem saldo {{ "nesta alocação" if filtros.rosca else "na carteira" }}.</p>
+    {% endif %}
+  </section>
+</div>
+
+{% if grafico.rotulos %}
+<section id="rentabilidade" class="{{ cartao_css }} p-5 mb-4 min-w-0">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+    <h2 class="font-semibold">Rentabilidade acumulada contra CDI, Ibovespa e índice global</h2>
+    {# o acumulado recomeça do zero no período escolhido; a âncora mantém a rolagem no gráfico #}
+    <form method="get" action="/investimentos#rentabilidade">
+      <input type="hidden" name="periodo" value="{{ filtros.periodo }}">
+      <input type="hidden" name="classe" value="{{ filtros.classe }}">
+      <input type="hidden" name="rosca" value="{{ filtros.rosca }}">
+      {% if carteira_sel %}<input type="hidden" name="carteira" value="{{ carteira_sel.id }}">{% endif %}
+      <label class="sr-only" for="filtro-periodo-rent">Período da rentabilidade</label>
+      <select id="filtro-periodo-rent" name="periodo_rent" onchange="this.form.submit()" class="{{ seletor }}">
+        {% for valor, rotulo in periodos.items() %}<option value="{{ valor }}"{% if filtros.periodo_rent == valor %} selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+      </select>
+      <noscript><button class="{{ botao_suave }}">Filtrar</button></noscript>
+    </form>
+  </div>
+  <div class="relative h-60"><canvas id="grafico-rentabilidade" role="img" aria-label="Rentabilidade acumulada da carteira contra CDI, Ibovespa e índice global"></canvas></div>
+</section>
+{% endif %}
+
+{# ---------- meus ativos: um bloco recolhível por alocação ---------- #}
+{# metas editadas aqui mesmo: meta da alocação no cabeçalho do bloco, meta do ativo dentro da alocação na coluna #}
+<form id="meus-ativos" x-data='meusAtivos({{ colunas_padrao|tojson }})' @input="sujo = true; somar()"
+      hx-post="/investimentos/metas" hx-target="#erro-metas" class="scroll-mt-6">
+<input type="hidden" name="carteira_id" value="{{ carteira_sel.id if carteira_sel else '' }}">
+<div class="flex flex-wrap items-baseline justify-between gap-3 mb-3">
+  <h2 class="font-semibold text-lg">Meus ativos ({{ carteira.ativos|length }})</h2>
+  {% if consolidada %}
+  <p class="text-xs text-ink-muted">Consolidada: metas de cada carteira, ponderadas pelo patrimônio de cada uma. Para editar, escolha a carteira.</p>
+  {% else %}
+  <p class="text-xs text-ink-muted">Edite as metas direto nos campos: a soma das alocações e a de cada alocação devem dar 100%.</p>
+  {% endif %}
+</div>
+<div id="erro-metas" class="mb-3 empty:hidden"></div>
+{% if carteira.reserva_abaixo_da_meta %}{% include "investimentos/_reserva.html" %}{% endif %}
+{% if carteira.reserva_abaixo_da_meta %}<p class="mb-1 text-xs text-ink-muted">A reserva de emergência fica no topo enquanto estiver abaixo da meta dela.</p>{% endif %}
+<div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
+  {% if ordem_manual %}
+    <span>Blocos na ordem que você escolheu.</span>
+    <button type="button" hx-post="/investimentos/classes/ordem-automatica" hx-swap="none"
+            class="text-primary font-medium hover:underline cursor-pointer rounded focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Voltar à ordem automática</button>
+  {% else %}
+    <span>Blocos em ordem automática: o maior gap (quanto falta para a meta) primeiro; acima da meta, o gap é 0. Use as setas para reordenar.</span>
+  {% endif %}
+</div>
+{% for c in carteira.classes %}
+<section x-data="{ aberto: true, editando: false }" class="{{ cartao_css }} mb-4">
+  <div class="flex flex-wrap items-center gap-3 px-5 py-4">
+    <button type="button" @click="aberto = !aberto" :aria-expanded="aberto" aria-controls="bloco-{{ c.classe }}"
+            class="flex flex-1 min-w-0 flex-wrap items-center gap-x-6 gap-y-3 text-left cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+      {% set gap = [c.meta_pct - c.pct_atual, 0]|max %}
+      {# nome e números de apoio | alocação com a meta marcada | quanto falta, em reais #}
+      <span class="flex items-center gap-3 min-w-0 lg:w-[22rem] lg:shrink-0">
+        <i data-lucide="chevron-down" class="size-4 shrink-0 text-ink-muted transition-transform duration-150" :class="aberto ? '' : '-rotate-90'"></i>
+        <span class="size-3 rounded-full shrink-0" style="background: {{ cores_classe[c.classe] }}" title="Risco {{ riscos[c.classe]|lower }}" role="img" aria-label="Risco {{ riscos[c.classe]|lower }}"></span>
+        <span class="min-w-0">
+          <span class="block font-semibold">{{ rotulos_classe[c.classe] }}</span>
+          <span class="block text-xs tabular-nums text-ink-muted">
+            {{ c.n_ativos }} {{ "ativo" if c.n_ativos == 1 else "ativos" }} · {{ c.saldo|reais }} ·
+            variação <span class="{{ sinal(c.variacao_pct or 0) }}">{{ c.variacao_pct|pct }}</span> ·
+            rentabilidade <span class="{{ sinal(c.rent_pct or 0) }}">{{ c.rent_pct|pct }}</span>
+          </span>
+        </span>
+      </span>
+      <span class="flex items-center gap-2 text-xs text-ink-muted" title="gap de {{ gap|pct(1) }} (pontos até a meta)">
+        Alocação <span class="text-sm font-medium text-ink tabular-nums">{{ c.pct_atual|pct(1) }}</span>
+        <span class="relative h-2 w-24 rounded-full bg-line" aria-hidden="true">
+          <span class="absolute inset-y-0 left-0 rounded-full" style="width: {{ [c.pct_atual, 100]|min|round(1) }}%; background: {{ cores_classe[c.classe] }}"></span>
+          {% if c.meta_pct %}<span class="absolute -top-1 h-4 w-0.5 rounded bg-ink" style="left: calc({{ [c.meta_pct, 100]|min|round(1) }}% - 1px)"></span>{% endif %}
+        </span>
+        <span class="tabular-nums">meta {{ c.meta_pct|pct(1) }}</span>
+      </span>
+      <span class="tabular-nums lg:w-36">
+        {% if c.falta > 0 %}<span class="block text-xs text-ink-muted">Falta para a meta</span><span class="font-semibold {{ 'text-warning' if gap >= 5 else 'text-ink' }}">{{ c.falta|reais }}</span>
+        {% elif c.falta < 0 %}<span class="block text-xs text-ink-muted">Acima da meta</span><span class="font-semibold text-ink">{{ (-c.falta)|reais }}</span>
+        {% else %}<span class="text-xs text-ink-muted">na meta</span>{% endif %}
+      </span>
+    </button>
+    {% if not consolidada %}{# na consolidada a meta já aparece na barra de alocação (só leitura) #}
+    <span class="inline-flex flex-col items-end gap-0.5">
+      <label class="inline-flex items-center gap-1.5 text-sm text-ink-muted">Meta
+        <input name="classe_{{ c.classe }}" data-meta-classe value="{{ c.meta_pct|num_input if c.meta_pct else '' }}" inputmode="decimal" placeholder="0"
+               aria-label="Meta de {{ rotulos_classe[c.classe] }} na carteira" class="{{ campo_meta }}">%
+      </label>
+      <span class="text-xs tabular-nums" :class="Math.abs((somaAtivos['{{ c.classe }}'] || 0) - 100) < 0.005 ? 'text-ink-muted' : 'text-warning'"
+            x-text="'ativos somam ' + fmt(somaAtivos['{{ c.classe }}'] || 0) + '%'"></span>
+    </span>
+    {% endif %}
+    <button type="button" @click="editando = !editando" :aria-expanded="editando" title="Editar colunas" class="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-primary rounded-xl px-2 h-9 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+      <i data-lucide="columns-3" class="size-4"></i><span class="sr-only">Editar colunas</span>
+    </button>
+    <span class="inline-flex items-center" role="group" aria-label="Ordem do bloco {{ rotulos_classe[c.classe] }}">
+      <button type="button" hx-post="/investimentos/classes/mover?classe={{ c.classe }}&passo=-1&carteira={{ carteira_sel.id if carteira_sel else '' }}"
+              hx-swap="none" {% if loop.first %}disabled{% endif %} aria-label="Subir {{ rotulos_classe[c.classe] }}" title="Subir"
+              class="size-9 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page disabled:opacity-30 disabled:cursor-default cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="arrow-up" class="size-4"></i></button>
+      <button type="button" hx-post="/investimentos/classes/mover?classe={{ c.classe }}&passo=1&carteira={{ carteira_sel.id if carteira_sel else '' }}"
+              hx-swap="none" {% if loop.last %}disabled{% endif %} aria-label="Descer {{ rotulos_classe[c.classe] }}" title="Descer"
+              class="size-9 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page disabled:opacity-30 disabled:cursor-default cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="arrow-down" class="size-4"></i></button>
+    </span>
+  </div>
+  <fieldset x-show="editando" x-cloak class="mx-5 mb-3 rounded-xl bg-page px-4 py-3">
+    <legend class="sr-only">Colunas visíveis (vale para todos os blocos)</legend>
+    <div class="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+      {% for chave, rotulo, _ in colunas %}
+        <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" :checked="ver('{{ chave }}')" @change="alternar('{{ chave }}')" class="size-4 accent-primary cursor-pointer">{{ rotulo }}</label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  <div id="bloco-{{ c.classe }}" x-show="aberto" class="overflow-x-auto border-t border-line">
+    {# largura fixa por coluna: os blocos ficam alinhados entre si; "Ativo" leva a sobra #}
+    <table class="table-fixed text-sm" :style="{ width: `max(100%, ${larguraMinima()}px)` }">
+      <thead class="text-xs text-ink-muted">
+        <tr class="border-b border-line">
+          <th scope="col" class="text-left font-medium px-5 py-2">Ativo</th>
+          {% for chave, rotulo, opcional in colunas %}
+            <th scope="col" x-show="ver('{{ chave }}')"{% if opcional %} x-cloak{% endif %} style="width: {{ larguras_colunas[chave] }}px" class="{{ 'text-center' if chave in ('comprar', 'opcoes') else 'text-right' }} font-medium px-3 py-2 whitespace-nowrap">{% if chave == "opcoes" %}<span class="sr-only">{{ rotulo }}</span>{% else %}{{ rotulo }}{% endif %}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-line">
+        {% for a in c.ativos %}
+        {% set rf = a.ativo.classe == "renda_fixa" and not a.ativo.por_titulos %}
+        <tr class="hover:bg-page transition-colors duration-150">
+          <td class="px-5 py-3">
+            <a href="/investimentos/ativos/{{ a.ativo.id }}{{ '?' ~ q_carteira if q_carteira }}" class="font-medium text-primary hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 rounded">{{ a.ativo.codigo }}</a>
+            <span class="inline-flex rounded-full bg-page text-ink-muted px-2 py-0.5 text-xs font-medium">{{ etiquetas_tipo[a.ativo.classe] }}</span>
+            <span class="block text-xs text-ink-muted truncate max-w-48">{{ a.ativo.nome }}</span>
+            {% if a.desatualizada %}<span class="inline-flex items-center gap-1 text-xs text-warning"><i data-lucide="alert-triangle" class="size-3"></i>cotação desatualizada</span>{% endif %}
+            {% if a.preco_manual %}<span class="inline-flex items-center gap-1 text-xs text-primary"><i data-lucide="pencil" class="size-3"></i>preço manual</span>{% endif %}
+            {% if a.quantidade == 0 %}<span class="inline-flex items-center gap-1 text-xs text-ink-muted"><i data-lucide="bookmark" class="size-3"></i>ainda não comprado</span>{% endif %}
+            {% if a.sem_cotacao %}<span class="inline-flex items-center gap-1 text-xs text-ink-muted"><i data-lucide="circle-dashed" class="size-3"></i>sem cotação</span>{% endif %}
+            {% if a.estimado %}<span class="inline-flex items-center gap-1 text-xs text-warning"><i data-lucide="alert-triangle" class="size-3"></i>IPCA estimado</span>{% endif %}
+          </td>
+          <td x-show="ver('quant')" class="px-3 py-3 text-right tabular-nums">{% if rf %}—{% else %}{{ a.quantidade|qtd }}{% endif %}</td>
+          <td x-show="ver('preco_medio')" class="px-3 py-3 text-right tabular-nums">{% if rf %}—{% else %}{{ a.preco_medio_brl|reais_dec }}{% endif %}</td>
+          <td x-show="ver('preco_atual')" class="px-3 py-3 text-right tabular-nums">{{ a.cotacao_brl|reais_dec }}</td>
+          <td x-show="ver('variacao')" class="px-3 py-3 text-right tabular-nums {{ sinal(a.variacao_pct or 0) }}">{{ a.variacao_pct|pct }}</td>
+          <td x-show="ver('dia')" x-cloak class="px-3 py-3 text-right tabular-nums {{ sinal(a.variacao_dia_pct or 0) }}">{{ a.variacao_dia_pct|pct }}</td>
+          <td x-show="ver('rentabilidade')" class="px-3 py-3 text-right tabular-nums">
+            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold {{ 'bg-page text-ink-muted' if a.rent_pct is none else ('bg-income/10 text-income' if a.rent_brl >= 0 else 'bg-expense/10 text-expense') }}">{{ a.rent_pct|pct }}</span>
+            <span class="block text-xs {{ sinal(a.rent_brl) }}">{{ a.rent_brl|reais }}</span>
+          </td>
+          <td x-show="ver('saldo')" class="px-3 py-3 text-right tabular-nums font-medium">{{ a.saldo|reais }}</td>
+          <td x-show="ver('na_classe')" class="px-3 py-3 text-right whitespace-nowrap"
+              title="{{ a.pct_carteira|pct(1) }} da carteira inteira · ideal na carteira {{ a.ideal_pct|pct(1) }}">
+            <span class="inline-flex items-center gap-2">
+              <span class="tabular-nums">{{ a.pct_classe|pct(1) }}</span>
+              <span class="relative h-1.5 w-16 rounded-full bg-line" aria-hidden="true">
+                <span class="absolute inset-y-0 left-0 rounded-full bg-primary" style="width: {{ [a.pct_classe, 100]|min|round(1) }}%"></span>
+                {% if a.meta_ativo_pct %}<span class="absolute -top-1 h-3.5 w-0.5 rounded bg-ink" style="left: calc({{ [a.meta_ativo_pct, 100]|min|round(1) }}% - 1px)"></span>{% endif %}
+              </span>
+            </span>
+          </td>
+          <td x-show="ver('meta')" class="px-3 py-2 text-right whitespace-nowrap">
+            {% if consolidada %}<span class="tabular-nums text-ink-muted">{{ a.meta_ativo_pct|pct(1) }}</span>{% else %}
+            <input name="ativo_{{ a.ativo.id }}" data-meta-ativo="{{ c.classe }}" value="{{ a.meta_ativo_pct|num_input if a.meta_ativo_pct else '' }}" inputmode="decimal" placeholder="0"
+                   aria-label="Meta de {{ a.ativo.codigo }} em {{ rotulos_classe[c.classe] }}" class="{{ campo_meta }}"><span class="text-ink-muted text-xs ml-1">%</span>{% endif %}
+          </td>
+          <td x-show="ver('falta')" class="px-3 py-3 text-right tabular-nums whitespace-nowrap">
+            {% if a.falta_classe > 0 %}<span class="font-medium text-income">{{ a.falta_classe|reais }}</span>
+            {% elif a.falta_classe < 0 %}<span class="font-medium text-ink-muted">{{ (-a.falta_classe)|reais }}</span><span class="block text-xs text-ink-muted">acima da meta</span>
+            {% elif a.meta_ativo_pct %}<span class="text-xs text-ink-muted">na meta</span>
+            {% else %}<span class="text-ink-muted">—</span>{% endif %}
+          </td>
+          <td x-show="ver('pct_carteira')" x-cloak class="px-3 py-3 text-right tabular-nums">{{ a.pct_carteira|pct(1) }}</td>
+          <td x-show="ver('pct_ideal')" x-cloak class="px-3 py-3 text-right tabular-nums text-ink-muted">{{ a.ideal_pct|pct(1) }}</td>
+          <td x-show="ver('comprar')" x-cloak class="px-3 py-3 text-center">
+            {% if a.comprar %}<span class="inline-flex items-center gap-1 rounded-full bg-income/10 text-income px-2.5 py-0.5 text-xs font-semibold"><i data-lucide="check" class="size-3"></i>Sim</span>
+            {% else %}<span class="inline-flex items-center rounded-full bg-page text-ink-muted px-2.5 py-0.5 text-xs font-medium">Não</span>{% endif %}
+          </td>
+          <td x-show="ver('opcoes')" class="px-3 py-1 text-center whitespace-nowrap">
+            <button type="button" hx-get="/investimentos/operacoes/nova?ativo_id={{ a.ativo.id }}" hx-target="#modal" aria-label="Nova operação de {{ a.ativo.codigo }}" title="Nova operação" class="{{ icone_btn }}"><i data-lucide="plus" class="size-4"></i></button>
+            <a href="/investimentos/ativos/{{ a.ativo.id }}{{ '?' ~ q_carteira if q_carteira }}" aria-label="Detalhes e alocação de {{ a.ativo.codigo }}" title="Detalhes, alocação e preço manual" class="{{ icone_btn }}"><i data-lucide="more-horizontal" class="size-4"></i></a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="{{ colunas|length + 1 }}" class="px-5 py-4 text-ink-muted">Sem ativos nesta alocação.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endfor %}
+<div x-show="sujo" x-cloak class="sticky bottom-4 z-20 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card border border-line shadow-[0_8px_24px_rgba(0,0,0,0.12)] px-5 py-3">
+  <span class="text-sm tabular-nums" :class="Math.abs(somaClasses - 100) < 0.005 ? 'text-ink-muted' : 'text-warning'"
+        x-text="'Alocações somam ' + fmt(somaClasses) + '%'"></span>
+  <div class="flex items-center gap-2">
+    <button type="button" onclick="location.reload()" class="{{ botao_suave }}">Descartar</button>
+    <button type="submit" class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar metas</button>
+  </div>
+</div>
+</form>
+
+{% if not carteira.reserva_abaixo_da_meta %}{% include "investimentos/_reserva.html" %}{% endif %}
+{% include "investimentos/_oportunidade.html" %}
+
+{% if carteira.por_corretora %}
+<section class="{{ cartao_css }} p-5">
+  <h2 class="font-semibold mb-1">Valor por local</h2>
+  <p class="text-xs text-ink-muted mb-3">Onde cada lote fica (conta de investimento e caixinha), para conferir com o saldo delas.</p>
+  <ul class="space-y-1 text-sm">
+    {% for nome, valor in carteira.por_corretora.items() %}
+      <li class="flex items-center justify-between gap-3 py-1"><span class="flex items-center gap-2 min-w-0"><i data-lucide="landmark" class="size-4 text-ink-muted shrink-0"></i><span class="truncate">{{ nome }}</span></span><span class="tabular-nums shrink-0">{{ valor|reais }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if carteira.classes %}
+<script src="/static/vendor/chart.umd.js"></script>
+<script>
+  // Colunas de "Meus ativos": a escolha vale para todos os blocos e fica no navegador (sem localStorage, o padrão).
+  function colunasAtivos(padrao) {
+    const CHAVE = "investimentos.colunas.v2";  // v2: colunas de alocação novas (a escolha antiga não vale mais)
+    const LARGURAS = {{ larguras_colunas|tojson }}, LARGURA_ATIVO = 200;
+    let salvo = {};
+    try { salvo = JSON.parse(localStorage.getItem(CHAVE) || "{}") || {}; } catch (e) { salvo = {}; }
+    const visiveis = {};
+    for (const [k, v] of Object.entries(padrao)) visiveis[k] = k in salvo ? !!salvo[k] : v;
+    return {
+      visiveis,
+      ver(k) { return this.visiveis[k]; },
+      // com as colunas fixas, a tabela rola na horizontal antes de espremer a coluna "Ativo"
+      // (vai em width: max(100%, …); min-width em tabela o navegador ignora)
+      larguraMinima() { return Object.keys(LARGURAS).reduce((t, k) => t + (this.visiveis[k] ? LARGURAS[k] : 0), LARGURA_ATIVO); },
+      alternar(k) {
+        this.visiveis[k] = !this.visiveis[k];
+        try { localStorage.setItem(CHAVE, JSON.stringify(this.visiveis)); } catch (e) { /* sem armazenamento: só nesta visita */ }
+      },
+    };
+  }
+
+  // Colunas + edição das metas: somas ao vivo e a barra de salvar só aparece depois de mexer.
+  function meusAtivos(padrao) {
+    const num = (v) => { const n = parseFloat(String(v).replace(/\./g, "").replace(",", ".")); return isNaN(n) ? 0 : n; };
+    return Object.assign(colunasAtivos(padrao), {
+      sujo: false, somaClasses: 0, somaAtivos: {},
+      init() { this.somar(); },
+      fmt(v) { return Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 2 }); },
+      somar() {
+        this.somaClasses = [...this.$el.querySelectorAll("[data-meta-classe]")].reduce((t, e) => t + num(e.value), 0);
+        const somas = {};
+        for (const e of this.$el.querySelectorAll("[data-meta-ativo]")) somas[e.dataset.metaAtivo] = (somas[e.dataset.metaAtivo] || 0) + num(e.value);
+        this.somaAtivos = somas;
+      },
+    });
+  }
+
+  const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const pctf = (v) => Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%";
+  const evo = {{ grafico|tojson }};
+  const barras = {{ barras|tojson }};
+  const alocacao = {{ alocacao|tojson }};
+  const estilo = getComputedStyle(document.documentElement);
+  const cor = (n) => estilo.getPropertyValue(n).trim();
+  const legenda = { position: "bottom", labels: { usePointStyle: true, color: cor("--c-ink-muted") } };
+
+  const graficoEvolucao = document.getElementById("grafico-evolucao");
+  if (graficoEvolucao) new Chart(graficoEvolucao, {
+    type: "bar",
+    data: {
+      labels: barras.rotulos,
+      datasets: [
+        { label: "Valor aplicado", data: barras.base, backgroundColor: cor("--c-primary"), stack: "p", borderRadius: 4 },
+        { label: "Ganho de capital", data: barras.ganho, backgroundColor: cor("--c-income"), stack: "p", borderRadius: 4 },
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: { stacked: true, grid: { display: false } },
+        y: { stacked: true, ticks: { callback: (v) => brl(v) }, grid: { color: cor("--c-line") } },
+      },
+      plugins: {
+        legend: legenda,
+        // valores reais: com ganho negativo a barra mostra o patrimônio, mas a dica traz aplicado e ganho de fato
+        tooltip: { callbacks: {
+          label: (c) => c.datasetIndex === 0 ? "Aplicado: " + brl(barras.aplicado_real[c.dataIndex])
+                                             : "Ganho de capital: " + brl(barras.ganho_real[c.dataIndex]),
+          footer: (itens) => itens.length ? "Patrimônio: " + brl(barras.patrimonio[itens[0].dataIndex]) : "",
+        } },
+      },
+    },
+  });
+
+  const graficoRent = document.getElementById("grafico-rentabilidade");
+  if (graficoRent) new Chart(graficoRent, {
+    type: "line",
+    data: {
+      labels: evo.rotulos,
+      datasets: [
+        { label: "Carteira", data: evo.carteira, borderColor: cor("--c-income"), backgroundColor: cor("--c-income"), tension: 0.25, pointRadius: 2 },
+        { label: "CDI", data: evo.cdi, borderColor: cor("--c-warning"), backgroundColor: cor("--c-warning"), tension: 0.25, pointRadius: 0, spanGaps: true },
+        { label: "Ibovespa", data: evo.ibov, borderColor: "#7C3AED", backgroundColor: "#7C3AED", tension: 0.25, pointRadius: 0, spanGaps: true },
+        // VT (Vanguard Total World) em reais: o que o mesmo dinheiro faria num índice global
+        { label: "Global (VT)", data: evo.global, borderColor: "#0891B2", backgroundColor: "#0891B2", tension: 0.25, pointRadius: 0, spanGaps: true },
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      scales: { y: { ticks: { callback: (v) => pctf(v) }, grid: { color: cor("--c-line") } }, x: { grid: { display: false } } },
+      plugins: { legend: legenda, tooltip: { callbacks: { label: (c) => c.dataset.label + ": " + pctf(c.parsed.y) } } },
+    },
+  });
+
+  const graficoAloc = document.getElementById("grafico-alocacao");
+  if (graficoAloc) new Chart(graficoAloc, {
+    type: "doughnut",
+    data: { labels: alocacao.rotulos, datasets: [{ data: alocacao.valores, borderWidth: 0, backgroundColor: alocacao.cores }] },
+    options: { maintainAspectRatio: false, cutout: "70%", plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: (c) => c.label + ": " + brl(c.parsed) } } } },
+  });
+</script>
+{% endif %}
+{% endblock %}

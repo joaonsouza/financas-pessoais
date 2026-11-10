@@ -1,0 +1,32 @@
+{# Pendências do mês e o que vence nos próximos 7 dias #}
+<section class="bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] flex flex-col" aria-labelledby="titulo-pendencias">
+  <div class="p-5 pb-2">
+    <h2 id="titulo-pendencias" class="font-semibold mb-3">Pendências</h2>
+    <div class="grid grid-cols-2 gap-3">
+      <a href="/lancamentos?mes={{ mes }}&tipo=despesa&status=pendente" class="rounded-xl bg-page p-3 cursor-pointer hover:bg-expense/10 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+        <span class="flex items-center gap-1.5 text-xs text-ink-muted"><i data-lucide="alert-circle" class="size-4 text-expense"></i>Despesas pendentes</span>
+        <span class="block mt-1 font-semibold tabular-nums text-expense">{{ pendente_despesas|reais }}</span>
+      </a>
+      <a href="/lancamentos?mes={{ mes }}&tipo=receita&status=pendente" class="rounded-xl bg-page p-3 cursor-pointer hover:bg-income/10 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+        <span class="flex items-center gap-1.5 text-xs text-ink-muted"><i data-lucide="alert-circle" class="size-4 text-income"></i>Receitas pendentes</span>
+        <span class="block mt-1 font-semibold tabular-nums text-income">{{ pendente_receitas|reais }}</span>
+      </a>
+    </div>
+    <h3 class="mt-4 mb-1 text-sm font-medium text-ink-muted">A pagar nos próximos 7 dias</h3>
+    <ul class="divide-y divide-line text-sm">
+      {% for item in a_pagar %}
+        <li class="flex items-center justify-between gap-3 py-2.5">
+          <span class="min-w-0">
+            <span class="{{ 'text-expense font-medium' if item.atrasado else 'text-ink-muted' }}">{{ item.data|data_br }}</span>
+            · {{ item.descricao }}
+            <span class="text-xs text-ink-muted">({{ item.conta_nome }})</span>
+          </span>
+          <span class="tabular-nums shrink-0">{{ item.valor|reais }}</span>
+        </li>
+      {% else %}
+        <li class="py-2 text-ink-muted">Nada a pagar nos próximos dias.</li>
+      {% endfor %}
+    </ul>
+  </div>
+  <a href="/lancamentos?mes={{ mes }}&status=pendente" class="mt-auto block border-t border-line py-3 text-center text-sm font-semibold uppercase tracking-wide text-primary hover:bg-page rounded-b-[20px] transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Ver mais</a>
+</section>

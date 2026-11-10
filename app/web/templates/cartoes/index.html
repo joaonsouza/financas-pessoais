@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block titulo %}Cartões{% endblock %}
+{% block cabecalho %}Cartões{% endblock %}
+{% block acoes_topo %}
+{% set redondo = "size-11 rounded-full bg-card border border-line flex items-center justify-center text-ink-muted hover:text-primary hover:border-primary transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+<button type="button" x-data @click="$dispatch('novo-cartao')" aria-label="Novo cartão" title="Novo cartão" class="{{ redondo }}"><i data-lucide="plus" class="size-5"></i></button>
+<a href="/cartoes/parcelas" aria-label="Parcelas" title="Parcelas" class="{{ redondo }}"><i data-lucide="layers" class="size-5"></i></a>
+<button type="button" x-data @click="$dispatch('organizar')" aria-label="Organizar cartões" title="Organizar cartões e o painel" class="{{ redondo }}"><i data-lucide="move" class="size-5"></i></button>
+<div x-data="{ menu: false }" class="relative" @click.outside="menu = false" @keydown.escape="menu = false">
+  <button type="button" @click="menu = !menu" aria-haspopup="menu" :aria-expanded="menu" aria-label="Mais opções" title="Mais opções" class="{{ redondo }}"><i data-lucide="more-vertical" class="size-5"></i></button>
+  <div x-show="menu" x-cloak role="menu" class="absolute right-0 top-full z-30 mt-1 w-56 bg-card border border-line rounded-xl shadow-xl py-1 text-sm">
+    <a role="menuitem" href="/cartoes{{ '' if ver_arquivados else '?arquivados=1#arquivados' }}" class="flex items-center gap-2 px-3 h-11 hover:bg-page cursor-pointer"><i data-lucide="archive" class="size-4 text-ink-muted"></i>{{ "Esconder arquivados" if ver_arquivados else "Ver arquivados" }} ({{ arquivados|length }})</a>
+  </div>
+</div>
+{% endblock %}
+{% block conteudo %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% if erro %}
+  <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set selo = {"paga": "bg-income/15 text-income", "vencida": "bg-expense text-white", "fechada": "bg-warning/15 text-warning", "paga_parcial": "bg-warning/15 text-warning", "aberta": "bg-primary-soft text-primary"} %}
+<div x-data="{ aba: '{{ aba_inicial }}' }" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 space-y-4">
+    <div class="inline-flex bg-card border border-line rounded-full p-1 text-sm" role="tablist" aria-label="Faturas">
+      {% for valor, rotulo in [("abertas", "Faturas abertas"), ("fechadas", "Faturas fechadas"), ("mes", "Por mês")] %}
+      <button type="button" role="tab" :aria-selected="aba === '{{ valor }}'" @click="aba = '{{ valor }}'"
+              :class="aba === '{{ valor }}' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink'"
+              class="h-9 px-4 rounded-full font-semibold transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">{{ rotulo }}</button>
+      {% endfor %}
+    </div>
+
+    {# aba "Por mês": a fatura que vence no mês, aberta ou fechada; troca de mês recarrega com ?mes= #}
+    {% set seta = "size-11 rounded-full flex items-center justify-center text-primary hover:bg-card transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+    {% set no_mes_atual = mes_faturas == mes_hoje() %}
+    <nav x-show="aba === 'mes'" x-cloak class="flex items-center justify-center gap-1 sm:gap-2" aria-label="Mês das faturas">
+      {# gêmeo invisível do "Hoje" à esquerda: equilibra a largura e mantém o mês no centro #}
+      <span aria-hidden="true" class="invisible h-9 px-3 flex items-center text-xs font-medium">Hoje</span>
+      <a href="/cartoes?mes={{ somar_meses(mes_faturas, -1) }}" aria-label="Mês anterior" class="{{ seta }}"><i data-lucide="chevron-left" class="size-5"></i></a>
+      <span class="font-semibold text-lg text-primary w-36 sm:w-44 shrink-0 text-center whitespace-nowrap">{{ mes_faturas|nome_mes }}</span>
+      <a href="/cartoes?mes={{ mes_hoje() }}" title="Ir para {{ mes_hoje()|nome_mes }}"{% if no_mes_atual %} aria-hidden="true" tabindex="-1"{% endif %}
+         class="{{ 'invisible ' if no_mes_atual }}h-9 px-3 rounded-full flex items-center text-xs font-medium text-primary bg-primary-soft hover:bg-primary hover:text-white transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Hoje</a>
+      <a href="/cartoes?mes={{ somar_meses(mes_faturas, 1) }}" aria-label="Próximo mês" class="{{ seta }}"><i data-lucide="chevron-right" class="size-5"></i></a>
+    </nav>
+
+    {# organizar: arrasta (PC) ou setas (celular/teclado); cada movimento salva a ordem na hora #}
+    <div x-data="organizarLista('cartao', '/cartoes/ordem')" @organizar.window="alternar($event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {{ m.aviso_organizar("md:col-span-2") }}
+      {% for r in resumos %}
+      {% set pct = r.usado_pct %}
+      <article x-data="{ menu: false }" data-cartao="{{ r.cartao.id }}" :draggable="organizando" @dragstart="iniciar($event)" @dragover="sobre($event)" @drop.prevent @dragend="soltar()"
+               :class="organizando && 'ring-2 ring-primary/40 cursor-move'" class="{{ cartao_css }} flex flex-col">
+        <header class="flex items-center gap-3 px-5 pt-5">
+          {{ m.avatar(r.cartao.nome, r.cartao.cor, "size-11", "text-sm") }}
+          <a href="/cartoes/{{ r.cartao.id }}" class="flex-1 min-w-0 font-semibold text-base truncate hover:text-primary cursor-pointer">{{ r.cartao.nome }}</a>
+          <div x-show="organizando" x-cloak class="flex">
+            <button type="button" @click="mover($el, -1)" aria-label="Subir {{ r.cartao.nome }}" title="Subir" class="size-11 rounded-xl flex items-center justify-center text-primary hover:bg-primary-soft cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="arrow-up" class="size-5"></i></button>
+            <button type="button" @click="mover($el, 1)" aria-label="Descer {{ r.cartao.nome }}" title="Descer" class="size-11 rounded-xl flex items-center justify-center text-primary hover:bg-primary-soft cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="arrow-down" class="size-5"></i></button>
+          </div>
+          <div class="relative" @click.outside="menu = false" @keydown.escape="menu = false">
+            <button type="button" @click="menu = !menu" aria-haspopup="menu" :aria-expanded="menu" aria-label="Ações de {{ r.cartao.nome }}" class="size-11 rounded-xl flex items-center justify-center text-ink-muted hover:text-primary hover:bg-primary-soft cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="more-vertical" class="size-5"></i></button>
+            <div x-show="menu" x-cloak role="menu" class="absolute right-0 top-full z-30 mt-1 w-52 bg-card border border-line rounded-xl shadow-xl py-1 text-sm">
+              <a role="menuitem" href="/cartoes/{{ r.cartao.id }}?fatura={{ r.competencia }}" class="flex items-center gap-2 px-3 h-11 hover:bg-page cursor-pointer"><i data-lucide="receipt" class="size-4 text-ink-muted"></i>Ver fatura</a>
+              <a role="menuitem" href="/cartoes/{{ r.cartao.id }}?fatura={{ r.competencia }}#editar" class="flex items-center gap-2 px-3 h-11 hover:bg-page cursor-pointer"><i data-lucide="pencil" class="size-4 text-ink-muted"></i>Editar</a>
+              <form method="post" action="/cartoes/{{ r.cartao.id }}/arquivar"><button role="menuitem" onclick="return confirm('Arquivar este cartão?')" class="w-full flex items-center gap-2 px-3 h-11 text-expense hover:bg-expense/10 cursor-pointer"><i data-lucide="archive" class="size-4"></i>Arquivar</button></form>
+            </div>
+          </div>
+        </header>
+
+        <div x-show="aba === 'abertas'" class="px-5 pt-4 text-sm flex items-start justify-between gap-3">
+          <div>
+            <div class="text-ink-muted">Fatura aberta · valor parcial</div>
+            <div class="text-xl font-semibold tabular-nums text-expense">{{ r.total|reais }}</div>
+            <div class="text-xs text-ink-muted">Fecha em {{ r.fechamento|data_extenso }}</div>
+          </div>
+          <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold {{ selo[r.status_chave] }}">{{ r.status }}</span>
+        </div>
+
+        <div x-show="aba === 'fechadas'" x-cloak class="px-5 pt-4 text-sm flex items-start justify-between gap-3">
+          <a href="/cartoes/{{ r.cartao.id }}?fatura={{ r.fechada.competencia }}" class="cursor-pointer hover:opacity-80">
+            <div class="text-ink-muted">Última fatura fechada</div>
+            <div class="text-xl font-semibold tabular-nums {{ 'text-income' if r.fechada.status_chave == 'paga' else 'text-expense' }}">{{ r.fechada.total|reais }}</div>
+            <div class="text-xs text-ink-muted">{{ "Venceu" if r.fechada.vencimento < hoje else "Vence" }} em {{ r.fechada.vencimento|data_extenso }}</div>
+          </a>
+          <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold {{ selo[r.fechada.status_chave] }}">{{ r.fechada.status }}</span>
+        </div>
+
+        {% set f = faturas_mes[loop.index0] %}
+        <div x-show="aba === 'mes'" x-cloak class="px-5 pt-4 text-sm flex items-start justify-between gap-3">
+          <a href="/cartoes/{{ r.cartao.id }}?fatura={{ f.competencia }}" class="cursor-pointer hover:opacity-80">
+            <div class="text-ink-muted">Fatura {{ f.vencimento|mes_de }}</div>
+            <div class="text-xl font-semibold tabular-nums {{ 'text-income' if f.status_chave == 'paga' else 'text-expense' }}">{{ f.total|reais }}</div>
+            <div class="text-xs text-ink-muted">{% if f.status_chave == "aberta" %}Fecha em {{ f.fechamento|data_extenso }}{% else %}{{ "Venceu" if f.vencimento < hoje else "Vence" }} em {{ f.vencimento|data_extenso }}{% endif %}</div>
+          </a>
+          <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold {{ selo[f.status_chave] }}">{{ f.status }}</span>
+        </div>
+
+        {# limite é do cartão, não da fatura: fica igual em todas as abas #}
+        <div class="px-5 pt-3 pb-4 text-sm">
+          {% if r.limite %}
+          <div>
+            <div class="flex justify-between text-xs text-ink-muted mb-1 tabular-nums"><span>{{ (r.limite - r.disponivel)|reais }} usado</span><span>de {{ r.limite|reais }}</span></div>
+            <div class="relative h-4 rounded-full bg-page overflow-hidden" role="progressbar" aria-label="Limite usado" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ [[pct, 0]|max, 100]|min|round(0) }}">
+              <div class="h-full rounded-full {{ 'bg-expense' if pct >= 90 else 'bg-warning' if pct >= 70 else 'bg-primary' }}" style="width: {{ [[pct, 0]|max, 100]|min }}%"></div>
+              <span class="absolute inset-y-0 right-2 flex items-center text-[11px] font-semibold tabular-nums">{{ "%.2f"|format(pct)|replace(".", ",") }}%</span>
+            </div>
+            <div class="mt-1 text-right text-xs text-ink-muted">Limite disponível <span class="font-semibold text-ink tabular-nums">{{ r.disponivel|reais }}</span></div>
+          </div>
+          {% else %}
+          <div class="text-xs text-ink-muted">Disponível {{ r.disponivel|reais }}</div>
+          {% endif %}
+        </div>
+
+        {% set v = vips.get(r.cartao.id) %}
+        {% if v %}
+        {% set vip_btn = "h-11 px-3 rounded-xl flex items-center justify-center gap-1.5 text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+        <div class="px-5 pb-3 text-sm flex items-center gap-2">
+          <i data-lucide="armchair" class="size-4 shrink-0 text-ink-muted" aria-hidden="true"></i>
+          <div class="flex-1 min-w-0">
+            <div>Sala VIP <span class="font-semibold tabular-nums {{ 'text-expense' if v.restantes == 0 else 'text-ink' }}">{{ v.restantes }} de {{ v.total }}</span></div>
+            <div class="text-xs text-ink-muted">{{ "renova em " ~ (v.renova_em|data_br) if v.renova_em else "renovação não informada" }}</div>
+          </div>
+          <form method="post" action="/cartoes/{{ r.cartao.id }}/vip/usar"><button class="{{ vip_btn }} font-medium" {% if v.restantes == 0 %}disabled{% endif %}>Usei 1</button></form>
+          <form method="post" action="/cartoes/{{ r.cartao.id }}/vip/desfazer"><button class="{{ vip_btn }}" aria-label="Desfazer o último voucher" title="Desfazer o último voucher" {% if v.usados == 0 %}disabled{% endif %}><i data-lucide="undo-2" class="size-4"></i></button></form>
+        </div>
+        {% endif %}
+
+        <button type="button" hx-get="/lancamentos/novo?tipo=cartao&conta={{ r.cartao.id }}" hx-target="#modal"
+                class="mt-auto border-t border-line py-3 text-sm font-semibold uppercase tracking-wide text-primary hover:bg-page rounded-b-[20px] transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Adicionar despesa</button>
+      </article>
+      {% endfor %}
+
+      {# último cartão: novo cartão de crédito #}
+      <div x-data="{ criando: false }" @novo-cartao.window="criando = true; $nextTick(() => { $el.scrollIntoView({ block: 'center' }); $el.querySelector('input[name=nome]').focus() })" class="{{ cartao_css }} p-5 flex flex-col">
+        <button type="button" x-show="!criando" @click="criando = true" class="flex-1 min-h-48 flex flex-col items-center justify-center gap-3 rounded-xl text-ink-muted hover:text-primary transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+          <span class="size-12 rounded-full border-2 border-current flex items-center justify-center"><i data-lucide="plus" class="size-6"></i></span>
+          <span class="font-semibold">Novo cartão de crédito</span>
+        </button>
+        <form x-show="criando" x-cloak method="post" action="/cartoes" class="grid grid-cols-2 gap-3 text-sm">
+          <label class="col-span-2 flex flex-col gap-1 font-medium text-ink-muted">Nome<input name="nome" required class="{{ campo }}"></label>
+          <label class="flex flex-col gap-1 font-medium text-ink-muted">Limite<input data-mascara="reais" name="limite" inputmode="decimal" class="{{ campo }}"></label>
+          <label class="flex flex-col gap-1 font-medium text-ink-muted">Conta pagadora
+            <select name="pagadora_id" required class="{{ campo }}">{% for c in pagadoras %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select>
+          </label>
+          <label class="flex flex-col gap-1 font-medium text-ink-muted">Fecha dia<input name="fechamento" inputmode="numeric" required class="{{ campo }}"></label>
+          <label class="flex flex-col gap-1 font-medium text-ink-muted">Vence dia<input name="vencimento" inputmode="numeric" required class="{{ campo }}"></label>
+          <div class="col-span-2 flex justify-end gap-2"><button type="button" @click="criando = false" class="h-11 px-4 rounded-xl text-ink-muted hover:bg-page cursor-pointer">Cancelar</button><button class="{{ botao }}"><i data-lucide="plus" class="size-4"></i>Criar</button></div>
+        </form>
+      </div>
+    </div>
+
+    {% if ver_arquivados %}
+    <section id="arquivados" aria-labelledby="titulo-arquivados">
+      <h2 id="titulo-arquivados" class="font-semibold mb-3 flex items-center gap-2"><i data-lucide="archive" class="size-4 text-ink-muted"></i>Cartões arquivados</h2>
+      <ul class="{{ cartao_css }} divide-y divide-line text-sm">
+        {% for c in arquivados %}
+          <li class="flex items-center gap-3 px-5 py-3">
+            {{ m.avatar(c.nome, c.cor) }}
+            <span class="flex-1 min-w-0 font-medium truncate">{{ c.nome }}</span>
+            <form method="post" action="/cartoes/{{ c.id }}/desarquivar">
+              <button class="inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="archive-restore" class="size-4"></i>Desarquivar</button>
+            </form>
+          </li>
+        {% else %}
+          <li class="px-5 py-4 text-ink-muted">Nenhum cartão arquivado.</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </div>
+
+  {# resumo: no PC na coluna da direita, no celular no topo #}
+  {% set painel_melhor %}
+    <div class="{{ cartao_css }} p-5 flex items-start gap-3">
+      <span class="size-11 rounded-full shrink-0 flex items-center justify-center bg-income/15 text-income"><i data-lucide="sparkles" class="size-5"></i></span>
+      <div class="min-w-0">
+        <div class="text-sm text-ink-muted">O melhor cartão para comprar hoje é</div>
+        {% if melhor %}
+          <div class="text-lg font-semibold truncate">{{ melhor.cartao.nome }}</div>
+          <div class="text-xs text-ink-muted">a compra de hoje só vence em {{ melhor.vencimento|data_br }} ({{ melhor.dias }} dias). Prazo não é dinheiro extra: só compre o que já cabe no orçamento.</div>
+        {% else %}
+          <div class="text-sm text-ink-muted">Cadastre um cartão com dias de fechamento e vencimento.</div>
+        {% endif %}
+      </div>
+    </div>
+  {% endset %}
+  {% set painel_limite %}
+    <div class="{{ cartao_css }} p-5 flex items-center gap-3">
+      <span class="size-11 rounded-full shrink-0 flex items-center justify-center bg-primary-soft text-primary"><i data-lucide="wallet" class="size-5"></i></span>
+      <div><div class="text-sm text-ink-muted">Limite disponível</div><div class="text-2xl font-semibold tabular-nums">{{ resumos|sum(attribute="disponivel")|reais }}</div></div>
+    </div>
+  {% endset %}
+  {% set painel_vip %}
+    {% if vips %}
+    {# para olhar antes de viajar: vouchers restantes de todos os cartões #}
+    <div class="{{ cartao_css }} p-5 flex items-start gap-3">
+      <span class="size-11 rounded-full shrink-0 flex items-center justify-center bg-primary-soft text-primary"><i data-lucide="armchair" class="size-5"></i></span>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm text-ink-muted">Sala VIP</div>
+        <ul class="mt-1 space-y-1.5 text-sm">
+          {% for r in resumos if vips.get(r.cartao.id) %}{% set v = vips[r.cartao.id] %}
+          <li class="flex items-baseline justify-between gap-3">
+            <span class="min-w-0"><span class="block truncate font-medium">{{ r.cartao.nome }}</span><span class="block text-xs text-ink-muted">{{ "renova em " ~ (v.renova_em|data_br) if v.renova_em else "renovação não informada" }}</span></span>
+            <span class="shrink-0 font-semibold tabular-nums {{ 'text-expense' if v.restantes == 0 else '' }}">{{ v.restantes }} de {{ v.total }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+  {% endset %}
+  {% set painel_faturas %}
+    <div class="{{ cartao_css }} p-5 flex items-center gap-3">
+      <span class="size-11 rounded-full shrink-0 flex items-center justify-center bg-expense/15 text-expense"><i data-lucide="receipt" class="size-5"></i></span>
+      <div x-show="aba !== 'mes'"><div class="text-sm text-ink-muted">Valor total das faturas abertas</div><div class="text-2xl font-semibold tabular-nums text-expense">{{ resumos|sum(attribute="total")|reais }}</div></div>
+      <div x-show="aba === 'mes'" x-cloak><div class="text-sm text-ink-muted">Faturas de {{ mes_faturas|nome_mes }}</div><div class="text-2xl font-semibold tabular-nums text-expense">{{ faturas_mes|sum(attribute="total")|reais }}</div></div>
+    </div>
+  {% endset %}
+  {% set painel_parcelas %}
+    {# resumo da página de parcelas; o card inteiro leva até ela #}
+    <a href="/cartoes/parcelas" class="{{ cartao_css }} p-5 flex items-start gap-3 hover:border-primary/40 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+      <span class="size-11 rounded-full shrink-0 flex items-center justify-center bg-primary-soft text-primary"><i data-lucide="layers" class="size-5"></i></span>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm text-ink-muted">Falta pagar em parcelas</div>
+        <div class="text-2xl font-semibold tabular-nums">{{ parcelas.total_a_pagar|reais }}</div>
+        {% if parcelas.qtd_compras %}
+        <div class="text-xs text-ink-muted">{{ parcelas.qtd_compras }} {{ "compra parcelada" if parcelas.qtd_compras == 1 else "compras parceladas" }} · mês mais pesado {{ parcelas.pico.competencia|nome_mes }} ({{ parcelas.pico.total|reais }})</div>
+        {% if parcelas.meses_acima %}<div class="text-xs font-medium text-expense">{{ parcelas.meses_acima }} {{ "mês" if parcelas.meses_acima == 1 else "meses" }} acima do teto de {{ parcelas.teto|reais }}</div>{% endif %}
+        {% else %}
+        <div class="text-xs text-ink-muted">Nenhuma compra parcelada em aberto.</div>
+        {% endif %}
+      </div>
+      <i data-lucide="chevron-right" class="size-5 shrink-0 self-center text-ink-muted" aria-hidden="true"></i>
+    </a>
+  {% endset %}
+  {% set painel_assinaturas %}
+    {% set n, valor = assinaturas %}
+    {{ m.card_atalho("/lancamentos/assinaturas", "badge-check", "Assinaturas", (valor|reais) ~ "/mês",
+                     n ~ (" ativa" if n == 1 else " ativas") ~ " nos cartões") }}
+  {% endset %}
+  {% set paineis = {"melhor": painel_melhor, "limite": painel_limite, "vip": painel_vip, "faturas": painel_faturas,
+                    "parcelas": painel_parcelas, "assinaturas": painel_assinaturas} %}
+  {% set rotulos_painel = {"melhor": "Melhor cartão", "limite": "Limite disponível", "vip": "Sala VIP", "faturas": "Faturas", "parcelas": "Parcelas", "assinaturas": "Assinaturas"} %}
+  <aside class="painel-lateral order-first lg:order-none space-y-4" x-data="organizarLista('painel', '/cartoes/painel/ordem')" @organizar.window="alternar($event)">
+    {% for id in ordem_painel if paineis[id]|trim %}
+    <div data-painel="{{ id }}" class="relative" :draggable="organizando" @dragstart="iniciar($event)" @dragover="sobre($event)" @drop.prevent @dragend="soltar()">
+      {{ paineis[id] }}
+      {{ m.alca_organizar(rotulos_painel[id]) }}
+    </div>
+    {% endfor %}
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "setup/layout.html" %}
+{% block passo %}Passo 1 de 2 — contas e cartões{% endblock %}
+{% block conteudo %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5" %}
+<form method="post" action="/setup" class="space-y-6">
+  <section class="{{ cartao_css }}">
+    <label class="text-sm font-medium flex flex-wrap items-center gap-2">Os saldos abaixo valem para o início do dia
+      <input type="date" name="data_inicio" value="{{ data_inicio }}" required class="{{ campo }}">
+    </label>
+  </section>
+
+  <section class="{{ cartao_css }} overflow-x-auto">
+    <h2 class="font-semibold">Contas</h2>
+    <p class="text-sm text-ink-muted mb-4">Pré-preenchido com a aba CONFIG_INICIAL da planilha, quando encontrada. "SL" = entra no saldo líquido.</p>
+    <input type="hidden" name="n_contas" value="{{ contas|length }}">
+    <datalist id="nomes-contas">
+      {% for c in contas if c.nome %}<option value="{{ c.nome }}">{% endfor %}
+    </datalist>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-ink-muted"><th class="py-2 w-14 font-medium">Usar</th><th class="font-medium">Nome</th><th class="font-medium">Tipo</th><th class="w-12 font-medium">SL</th><th class="font-medium">Saldo inicial (R$)</th></tr>
+      </thead>
+      <tbody>
+        {% for c in contas %}{% set i = loop.index0 %}
+        <tr class="border-t border-line">
+          <td class="py-2"><input type="checkbox" name="conta_incluir_{{ i }}" aria-label="Usar conta" {% if c.incluir %}checked{% endif %} class="size-5 rounded accent-[var(--c-primary)] cursor-pointer"></td>
+          <td class="pr-2"><input name="conta_nome_{{ i }}" value="{{ c.nome }}" aria-label="Nome da conta" class="{{ campo }} w-52"></td>
+          <td class="pr-2">
+            <select name="conta_tipo_{{ i }}" aria-label="Tipo" class="{{ campo }}">
+              <option value="corrente" {% if c.tipo == "corrente" %}selected{% endif %}>Corrente</option>
+              <option value="investimento" {% if c.tipo == "investimento" %}selected{% endif %}>Investimento</option>
+            </select>
+          </td>
+          <td><input type="checkbox" name="conta_sl_{{ i }}" aria-label="Entra no saldo líquido" {% if c.sl %}checked{% endif %} class="size-5 rounded accent-[var(--c-primary)] cursor-pointer"></td>
+          <td><input data-mascara="reais" name="conta_saldo_{{ i }}" value="{{ c.saldo }}" inputmode="decimal" aria-label="Saldo inicial" class="{{ campo }} w-36 text-right tabular-nums"></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="{{ cartao_css }} overflow-x-auto">
+    <h2 class="font-semibold mb-4">Cartões de crédito</h2>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-ink-muted"><th class="py-2 font-medium">Nome</th><th class="font-medium">Limite (R$)</th><th class="font-medium">Dia fechamento</th><th class="font-medium">Dia vencimento</th><th class="font-medium">Conta pagadora</th></tr>
+      </thead>
+      <tbody>
+        {% for c in cartoes %}{% set i = loop.index0 %}
+        <tr class="border-t border-line">
+          <td class="py-2 pr-2"><input name="cartao_nome_{{ i }}" value="{{ c.nome }}" aria-label="Nome do cartão" class="{{ campo }} w-52"></td>
+          <td class="pr-2"><input data-mascara="reais" name="cartao_limite_{{ i }}" value="{{ c.limite }}" inputmode="decimal" aria-label="Limite" class="{{ campo }} w-32 text-right tabular-nums"></td>
+          <td class="pr-2"><input name="cartao_fechamento_{{ i }}" value="{{ c.fechamento }}" inputmode="numeric" aria-label="Dia de fechamento" class="{{ campo }} w-24"></td>
+          <td class="pr-2"><input name="cartao_vencimento_{{ i }}" value="{{ c.vencimento }}" inputmode="numeric" aria-label="Dia de vencimento" class="{{ campo }} w-24"></td>
+          <td><input name="cartao_pagadora_{{ i }}" value="{{ c.pagadora }}" list="nomes-contas" aria-label="Conta pagadora" class="{{ campo }} w-44"></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <div class="flex justify-end">
+    <button class="inline-flex items-center gap-2 bg-primary hover:bg-primary-strong text-white px-6 h-11 rounded-xl font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Continuar<i data-lucide="chevron-right" class="size-4"></i></button>
+  </div>
+</form>
+{% endblock %}

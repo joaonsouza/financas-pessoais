@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% from "_seletor_categoria.html" import seletor_categoria with context %}
+{% block titulo %}Revisar importação{% endblock %}
+{% block cabecalho %}Revisar importação{% endblock %}
+{% block conteudo %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set botao_sec = "inline-flex items-center gap-2 bg-primary-soft text-primary rounded-xl px-4 h-11 font-medium hover:bg-primary-soft/70 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set chips = {
+  "nova": "bg-primary-soft text-primary",
+  "parcela": "bg-warning/10 text-warning",
+  "duplicada": "bg-page text-ink-muted border border-line",
+  "conciliar": "bg-income/10 text-income",
+  "transferencia": "bg-primary-soft text-primary",
+  "pagamento_fatura": "bg-[#7C3AED]/10 text-[#7C3AED]",
+} %}
+{% set icones = {"nova": "plus", "parcela": "layers", "duplicada": "copy", "conciliar": "link", "transferencia": "arrow-left-right", "pagamento_fatura": "credit-card"} %}
+{% set r = proposta.resultado %}
+
+<div class="{{ cartao_css }} p-5 mb-6 flex flex-wrap items-center gap-x-6 gap-y-2">
+  <div class="min-w-0">
+    <div class="font-semibold truncate">{{ proposta.nome_arquivo }}</div>
+    <div class="text-sm text-ink-muted">{{ proposta.conta.nome }} · {{ proposta.linhas|length }} transações lidas{% if r.competencia_fatura %} · fatura {{ r.competencia_fatura }}{% endif %}{% if r.vencimento %} · vence em {{ r.vencimento|data_br }}{% endif %}</div>
+  </div>
+  {% if pode_ia %}
+    <form method="post" action="/importar/{{ token }}/ler" class="ml-auto">
+      <input type="hidden" name="ia" value="1">
+      <input type="hidden" name="conta_id" value="{{ proposta.conta.id }}">
+      <button class="{{ botao_sec }}"><i data-lucide="sparkles" class="size-4"></i>Tentar com IA</button>
+    </form>
+  {% endif %}
+</div>
+
+{% for aviso in proposta.avisos %}
+  <div role="alert" class="mb-3 rounded-xl bg-warning/10 border border-warning/30 text-warning px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ aviso }}</span></div>
+{% endfor %}
+{% if proposta.sugestao_fechamento %}
+  <div class="mb-3 rounded-xl bg-primary-soft text-primary px-4 py-3 flex items-start gap-2"><i data-lucide="info" class="size-5 shrink-0 mt-0.5"></i><span>O fechamento desta fatura foi no dia {{ proposta.sugestao_fechamento }}; o cartão está configurado com o dia {{ proposta.conta.dia_fechamento }}. A configuração não foi alterada (confira em Cartões).</span></div>
+{% endif %}
+
+{% if erros %}
+  <div role="alert" class="mb-3 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>Nada foi gravado. Resolva as linhas de pagamento de fatura destacadas abaixo.</span></div>
+{% endif %}
+<form method="post" action="/importar/{{ token }}/confirmar" class="mt-3">
+  <ul class="{{ cartao_css }} divide-y divide-line overflow-hidden mb-6">
+    {% for ln in proposta.linhas %}
+      {% set t = ln.transacao %}
+      {% set opcoes = cat_receita if ln.tipo == "receita" else cat_despesa %}
+      {% set cat_sel = previo.categorias[ln.indice] if previo and ln.indice in previo.categorias else ln.categoria_id %}
+      {% set marcada = (ln.indice in previo.marcadas) if previo else ln.marcada %}
+      <li class="px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2" data-desc="{{ ln.descricao_norm }}">
+        <label class="size-11 -ml-2 flex items-center justify-center cursor-pointer">
+          <input type="checkbox" name="marcada_{{ ln.indice }}" value="1" {% if marcada %}checked{% endif %}
+                 aria-label="Importar: {{ t.descricao }}" class="size-5 rounded accent-[var(--c-primary)] cursor-pointer">
+        </label>
+        <div class="flex-1 min-w-[10rem]">
+          <div class="font-medium break-words">{{ t.descricao }}</div>
+          <div class="text-sm text-ink-muted">{{ t.data|data_br }}{% if t.parcela_num %} · parcela {{ t.parcela_num }}/{{ t.parcela_total }}{% endif %}{% if t.portador %} · final {{ t.portador }}{% endif %}{% if ln.fatura_competencia and proposta.conta.tipo == "cartao" and ln.status != "pagamento_fatura" %} · fatura {{ ln.fatura_competencia }}{% endif %}</div>
+        </div>
+        <div class="font-semibold tabular-nums {{ 'text-income' if t.valor > 0 else 'text-expense' }}">{{ t.valor|reais }}</div>
+        <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium {{ chips[ln.status] }}">
+          <i data-lucide="{{ icones[ln.status] }}" class="size-3.5"></i>{{ ln.rotulo or rotulos[ln.status] }}{% if ln.status == "parcela" and ln.parcelas_futuras %} · cria {{ ln.parcelas_futuras|length }} futura{{ "s" if ln.parcelas_futuras|length > 1 }}{% endif %}
+        </span>
+        {% if ln.status == "pagamento_fatura" and not ln.conciliar_com_id %}
+          {% set fat_sel = previo.faturas[ln.indice] if previo and ln.indice in previo.faturas else (ln.fatura_id|string if ln.fatura_id else "") %}
+          {% set sugerida = ln.fatura_id or (ln.cartao_id and ln.fatura_competencia) %}
+          <select name="fatura_{{ ln.indice }}" aria-label="Fatura paga por {{ t.descricao }}" class="{{ campo }} max-w-full"
+                  {% if ln.indice in erros %}aria-invalid="true"{% endif %}>
+            <option value="">{{ "Usar a fatura sugerida" if sugerida else "Escolha a fatura…" }}</option>
+            {% for fid, rotulo in ln.candidatos_fatura %}<option value="{{ fid }}" {% if fat_sel == fid|string %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+            {% for cid, comp, rotulo in ln.criar_fatura %}<option value="criar:{{ cid }}:{{ comp }}" {% if fat_sel == "criar:%s:%s"|format(cid, comp) %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+            <option value="despesa" {% if fat_sel == "despesa" %}selected{% endif %}>Não é pagamento de fatura (lançar como despesa)</option>
+          </select>
+        {% endif %}
+        {% if ln.status in ("nova", "parcela", "conciliar", "duplicada") %}
+          <div class="w-full sm:w-52">
+            {{ seletor_categoria("categoria_" ~ ln.indice, cat_sel or "", ln.tipo if ln.tipo == "receita" else "despesa",
+                                 rotulo_aria="Categoria de " ~ t.descricao, criar=true) }}
+          </div>
+          <div class="flex items-center gap-1">
+            <button type="button" onclick="aplicarIguais(this)" title="Aplicar esta categoria às linhas com a mesma descrição" aria-label="Aplicar a categoria às linhas iguais"
+                    class="size-11 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page hover:text-primary transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="copy-check" class="size-5"></i></button>
+            <label class="flex items-center gap-2 min-h-11 text-sm text-ink-muted cursor-pointer"><input type="checkbox" name="regra_{{ ln.indice }}" value="1" {% if previo and ln.indice in previo.regras %}checked{% endif %} class="size-5 rounded accent-[var(--c-primary)] cursor-pointer">Criar regra</label>
+          </div>
+        {% endif %}
+        {% if ln.indice in erros %}
+          <p role="alert" class="w-full text-sm text-expense flex items-start gap-2"><i data-lucide="alert-circle" class="size-4 shrink-0 mt-0.5"></i>{{ erros[ln.indice] }}</p>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+
+  <section class="{{ cartao_css }} p-5 flex flex-wrap items-center gap-x-8 gap-y-3" aria-label="Resumo da importação">
+    <div>
+      <div class="text-sm text-ink-muted">{{ "Total das compras (importado)" if proposta.conta.tipo == "cartao" else "Saldo das transações" }}</div>
+      <div class="text-xl font-semibold tabular-nums">{{ proposta.total_importado|reais }}</div>
+    </div>
+    {% if proposta.total_informado is not none %}
+      <div>
+        <div class="text-sm text-ink-muted">Total informado no arquivo</div>
+        <div class="text-xl font-semibold tabular-nums {{ 'text-expense' if proposta.divergente else 'text-income' }}">{{ proposta.total_informado|reais }}</div>
+      </div>
+      <div class="flex items-center gap-2 text-sm font-medium {{ 'text-expense' if proposta.divergente else 'text-income' }}">
+        <i data-lucide="{{ 'alert-circle' if proposta.divergente else 'check' }}" class="size-5"></i>{{ "Não bate com o total" if proposta.divergente else "Bate com o total" }}
+      </div>
+    {% elif r.saldo_final_informado is not none %}
+      <div><div class="text-sm text-ink-muted">Saldo final informado</div><div class="text-xl font-semibold tabular-nums">{{ r.saldo_final_informado|reais }}</div></div>
+    {% endif %}
+    <label class="flex items-center gap-2 min-h-11 text-sm cursor-pointer"><input type="checkbox" name="criar_futuras" value="1" {% if not previo or previo.criar_futuras %}checked{% endif %} class="size-5 rounded accent-[var(--c-primary)] cursor-pointer">Criar parcelas futuras como pendentes</label>
+    <div class="ml-auto flex flex-wrap gap-2">
+      <a href="/importar" class="inline-flex items-center px-4 h-11 rounded-xl text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Cancelar</a>
+      <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Confirmar importação</button>
+    </div>
+  </section>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  function aplicarIguais(botao) {
+    var linha = botao.closest("li");
+    var origem = linha.querySelector("input[type=hidden][name^=categoria_]");
+    document.querySelectorAll("li[data-desc]").forEach(function (outra) {
+      if (outra === linha || outra.dataset.desc !== linha.dataset.desc) return;
+      var alvo = outra.querySelector("input[type=hidden][name^=categoria_]");
+      if (alvo) definirCategoria(outra, alvo.name, origem.value);   // de outro tipo, o seletor ignora
+    });
+  }
+</script>
+{% endblock %}

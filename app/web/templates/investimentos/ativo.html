@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block titulo %}{{ ativo.codigo }}{% endblock %}
+{% block cabecalho %}{{ ativo.codigo }}{% if ativo.nome %} <span class="text-base font-normal text-ink-muted">· {{ ativo.nome }}</span>{% endif %}{% endblock %}
+{% block conteudo %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set icone_btn = "size-11 rounded-xl inline-flex items-center justify-center text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% macro sinal(valor) %}{{ 'text-income' if valor > 0 else ('text-expense' if valor < 0 else 'text-ink-muted') }}{% endmacro %}
+
+<div class="flex flex-wrap items-center justify-between gap-x-4 mb-4">
+  <a href="/investimentos{{ '?carteira=' ~ carteira_sel.id if carteira_sel }}" class="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink min-h-11 cursor-pointer"><i data-lucide="chevron-left" class="size-4"></i>{{ carteira_sel.nome if carteira_sel else "Investimentos" }}</a>
+  {% if carteira_sel %}
+  <p class="text-sm text-ink-muted"><i data-lucide="briefcase" class="size-4 inline -mt-0.5"></i> Posição e operações só da {{ carteira_sel.nome }} ·
+    <a href="/investimentos/ativos/{{ ativo.id }}" class="text-primary font-medium hover:underline cursor-pointer">ver de todas as carteiras</a></p>
+  {% endif %}
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+  <div class="{{ cartao_css }} p-5">
+    <div class="text-sm text-ink-muted">Posição</div>
+    <div class="mt-2 text-2xl font-semibold tabular-nums">{% if ativo.classe == "renda_fixa" and not ativo.por_titulos %}{{ linha.saldo|reais if linha else (0|reais) }}{% else %}{{ pos.quantidade|qtd }}{% endif %}</div>
+    <div class="text-xs text-ink-muted mt-1">{{ rotulos_classe[ativo.classe] }}{% if ativo.simbolo_cotacao %} · {{ ativo.simbolo_cotacao }}{% endif %}</div>
+  </div>
+  <div class="{{ cartao_css }} p-5">
+    <div class="text-sm text-ink-muted">Preço médio</div>
+    <div class="mt-2 text-2xl font-semibold tabular-nums">{% if ativo.classe == "renda_fixa" and not ativo.por_titulos %}—{% else %}{{ pos.preco_medio_brl|reais_dec }}{% endif %}</div>
+    <div class="text-xs text-ink-muted tabular-nums mt-1">custo {{ pos.custo_brl|reais }}</div>
+  </div>
+  <div class="{{ cartao_css }} p-5">
+    <div class="text-sm text-ink-muted">{% if ativo.classe == "renda_fixa" %}Taxa{% else %}Cotação{% endif %}</div>
+    {% if ativo.classe == "renda_fixa" %}
+      <div class="mt-2 text-2xl font-semibold tabular-nums">{{ ativo.taxa|qtd }}%</div>
+      <div class="text-xs text-ink-muted mt-1">{{ rotulos_indexador[ativo.indexador] }}{% if ativo.vencimento %} · vence {{ ativo.vencimento|data_br }}{% endif %}</div>
+    {% elif linha and linha.cotacao_brl is not none %}
+      <div class="mt-2 text-2xl font-semibold tabular-nums">{{ linha.cotacao_brl|reais_dec }}</div>
+      <div class="text-xs mt-1 {% if linha.desatualizada %}text-warning{% else %}text-ink-muted{% endif %}">
+        {% if linha.preco_manual %}preço manual{% elif linha.desatualizada %}cotação desatualizada{% else %}de {{ cotacao.data|data_br }}{% endif %}
+      </div>
+    {% else %}
+      <div class="mt-2 text-2xl font-semibold text-ink-muted">—</div>
+      <div class="text-xs text-ink-muted mt-1">sem cotação</div>
+    {% endif %}
+  </div>
+  <div class="{{ cartao_css }} p-5">
+    <div class="text-sm text-ink-muted">Resultado</div>
+    {% if linha %}
+      <div class="mt-2 text-2xl font-semibold tabular-nums {{ sinal(linha.rent_brl) }}">{{ linha.rent_brl|reais }}</div>
+      <div class="text-xs tabular-nums mt-1 {{ sinal(linha.rent_brl) }}">{{ linha.rent_pct|pct }} · realizado {{ pos.lucro_realizado_brl|reais }}</div>
+    {% else %}
+      <div class="mt-2 text-2xl font-semibold tabular-nums">{{ pos.lucro_realizado_brl|reais }}</div>
+      <div class="text-xs text-ink-muted mt-1">lucro realizado</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+  {% if ativo.simbolo_cotacao %}
+  <section class="{{ cartao_css }} p-5 lg:col-span-2 min-w-0">
+    <h2 class="font-semibold mb-3">Preço mensal</h2>
+    {% if grafico.rotulos %}
+      <div class="relative h-60"><canvas id="grafico-preco" role="img" aria-label="Fechamento mensal de {{ ativo.codigo }}"></canvas></div>
+    {% else %}
+      <p class="text-sm text-ink-muted">Sem histórico em cache. Use "Atualizar cotações" na página de investimentos.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+  {% if ativo.classe != "renda_fixa" %}
+  <section class="{{ cartao_css }} p-5">
+    <h2 class="font-semibold mb-3">Preço manual</h2>
+    <p class="text-sm text-ink-muted mb-3">Vale enquanto for mais recente que a última cotação. Deixe em branco para voltar à cotação automática.</p>
+    <form method="post" action="/investimentos/ativos/{{ ativo.id }}/preco-manual" class="flex flex-wrap gap-3 items-end">
+      <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted flex-1 min-w-32">Preço ({{ "US$" if ativo.moeda == "USD" else "R$" }})
+        <input data-mascara="reais" name="preco" value="{{ (ativo.preco_manual|reais_input) if ativo.preco_manual is not none else '' }}" inputmode="decimal" placeholder="0,00" class="{{ campo }} tabular-nums">
+      </label>
+      <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar</button>
+    </form>
+    {% if ativo.preco_manual is not none %}<p class="text-xs text-ink-muted mt-2">Preço manual de {{ ativo.preco_manual_em|data_br }}.</p>{% endif %}
+  </section>
+  <section class="{{ cartao_css }} p-5">
+    <h2 class="font-semibold mb-3">Rendimento embutido</h2>
+    <p class="text-sm text-ink-muted mb-3">Para ativo que rende sozinho na corretora (ex.: USDC). A quantidade cresce todo dia, a juros compostos, desde cada operação. Deixe em branco se não rende.</p>
+    <form method="post" action="/investimentos/ativos/{{ ativo.id }}/rendimento" class="flex flex-wrap gap-3 items-end">
+      <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted flex-1 min-w-32">% ao ano
+        <input name="rendimento" value="{{ ativo.rendimento_aa|qtd if ativo.rendimento_aa else '' }}" inputmode="decimal" placeholder="0" class="{{ campo }} tabular-nums">
+      </label>
+      <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar</button>
+    </form>
+    {% if ativo.rendimento_aa %}<p class="text-xs text-ink-muted mt-2">Rende {{ ativo.rendimento_aa|qtd }}% a.a.; a posição de hoje já inclui o rendimento desde a última operação. Se o saldo da corretora divergir, lance um ajuste de posição.</p>{% endif %}
+  </section>
+  {% endif %}
+  <section class="{{ cartao_css }} p-5">
+    <h2 class="font-semibold mb-3">Alocação</h2>
+    <p class="text-sm text-ink-muted mb-3">Em que parte da carteira o ativo conta (blocos, rosca, metas e rebalanceamento). O tipo ({{ rotulos_classe[ativo.classe] }}) segue valendo para cotação e operações.</p>
+    <form method="post" action="/investimentos/ativos/{{ ativo.id }}/alocacao" class="flex flex-wrap gap-3 items-end">
+      <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted flex-1 min-w-32">Alocação
+        <select name="alocacao" class="{{ campo }}">
+          {% for chave, rotulo in alocacoes.items() %}<option value="{{ chave }}"{% if ativo.alocacao == chave %} selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+        </select>
+      </label>
+      <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar</button>
+    </form>
+    {% if linha %}<p class="text-xs text-ink-muted mt-2 tabular-nums">{{ linha.pct_carteira|pct(1) }} da carteira · ideal {{ linha.ideal_pct|pct(1) }} · comprar? {{ "Sim" if linha.comprar else "Não" }}</p>{% endif %}
+  </section>
+  {% if carteiras_lista|length > 1 %}
+  <section class="{{ cartao_css }} p-5">
+    <h2 class="font-semibold mb-3">Carteiras</h2>
+    <p class="text-sm text-ink-muted mb-3">Ainda não comprei: em quais carteiras o ativo aparece, mesmo sem compra nelas, para receber meta e entrar no rebalanceamento. Onde já foi comprado, ele aparece de qualquer jeito. Desmarcar uma carteira em que ele não tem posição também zera a meta dele lá.</p>
+    <form method="post" action="/investimentos/ativos/{{ ativo.id }}/carteira" class="flex flex-wrap gap-x-5 gap-y-3 items-center">
+      {% for c in carteiras_lista %}
+      <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
+        <input type="checkbox" name="carteira_id" value="{{ c.id }}"{% if c.id in desejo_ids %} checked{% endif %} class="size-4 accent-primary">{{ c.nome }}
+      </label>
+      {% endfor %}
+      <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+
+<section class="{{ cartao_css }} overflow-hidden">
+  <div class="flex items-center justify-between px-5 pt-5">
+    <h2 class="font-semibold">Operações</h2>
+    <button type="button" hx-get="/investimentos/operacoes/nova?ativo_id={{ ativo.id }}" hx-target="#modal" class="{{ botao }}"><i data-lucide="plus" class="size-4"></i>Operação</button>
+  </div>
+  <div class="overflow-x-auto mt-3">
+    <table class="w-full text-sm min-w-[640px]">
+      <thead class="text-xs text-ink-muted">
+        <tr class="border-b border-line">
+          <th scope="col" class="text-left font-medium px-5 py-2">Data</th>
+          <th scope="col" class="text-left font-medium px-3 py-2">Tipo</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Qtd</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">{% if ativo.classe == "renda_fixa" and not ativo.por_titulos %}Valor{% else %}Preço{% endif %}</th>
+          <th scope="col" class="text-right font-medium px-3 py-2">Taxas</th>
+          <th scope="col" class="px-5 py-2"><span class="sr-only">Ações</span></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-line">
+        {% for o in ops %}
+        <tr class="hover:bg-page transition-colors duration-150">
+          <td class="px-5 py-3 tabular-nums">{{ o.data|data_br }}</td>
+          <td class="px-3 py-3">{{ rotulos_tipo[o.tipo] }}{% if o.observacao %}<span class="block text-xs text-ink-muted">{{ o.observacao }}</span>{% endif %}</td>
+          <td class="px-3 py-3 text-right tabular-nums">{% if ativo.classe == "renda_fixa" and not ativo.por_titulos %}—{% else %}{{ o.quantidade|qtd }}{% endif %}</td>
+          <td class="px-3 py-3 text-right tabular-nums">{{ o.preco_unitario|reais }}{% if o.cambio %}<span class="block text-xs text-ink-muted">câmbio {{ o.cambio|qtd }}</span>{% endif %}</td>
+          <td class="px-3 py-3 text-right tabular-nums">{{ o.taxas|reais }}</td>
+          <td class="px-5 py-1 text-right whitespace-nowrap">
+            <button type="button" hx-get="/investimentos/operacoes/{{ o.id }}/editar" hx-target="#modal" aria-label="Editar operação de {{ o.data|data_br }}" class="{{ icone_btn }}"><i data-lucide="pencil" class="size-4"></i></button>
+            <button type="button" hx-post="/investimentos/operacoes/{{ o.id }}/excluir" hx-confirm="Excluir esta operação?" aria-label="Excluir operação de {{ o.data|data_br }}" class="{{ icone_btn }} hover:text-expense"><i data-lucide="trash-2" class="size-4"></i></button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="px-5 py-4 text-ink-muted">Nenhuma operação.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{# tirar o ativo da carteira: saída completa (mantém o histórico) ou exclusão de tudo #}
+<section class="{{ cartao_css }} p-5 mt-4 space-y-4">
+  <h2 class="font-semibold">Tirar da carteira</h2>
+  {% if link_encerrar %}
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <p class="text-sm text-ink-muted flex-1 min-w-60">Registra a {{ "resgate" if ativo.classe == "renda_fixa" else "venda" }} da posição inteira ({{ pos.quantidade|qtd }}). O histórico e a rentabilidade ficam; sem posição e sem meta, o ativo sai da lista. Confira o preço com a nota antes de salvar.</p>
+    <button type="button" hx-get="{{ link_encerrar }}" hx-target="#modal" class="inline-flex items-center gap-2 px-4 h-11 rounded-xl bg-primary-soft text-primary font-medium hover:opacity-80 transition-opacity duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="log-out" class="size-4"></i>Encerrar posição</button>
+  </div>
+  {% endif %}
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <p class="text-sm text-ink-muted flex-1 min-w-60">Apaga o ativo{% if ops %}, as {{ ops|length }} operações, as transferências ligadas a elas{% endif %} e as metas dele nas carteiras, como se nunca tivesse existido. Não dá para desfazer.</p>
+    {% set pergunta = "Excluir " ~ ativo.codigo ~ (" e as " ~ ops|length ~ " operações" if ops else "") ~ "? Não dá para desfazer." %}
+    <form method="post" action="/investimentos/ativos/{{ ativo.id }}/excluir" onsubmit="return confirm({{ pergunta|tojson|forceescape }})">
+      <button class="inline-flex items-center gap-2 px-4 h-11 rounded-xl text-expense hover:bg-expense/10 font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="trash-2" class="size-4"></i>Excluir ativo</button>
+    </form>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% if grafico.rotulos %}
+<script src="/static/vendor/chart.umd.js"></script>
+<script>
+  const dados = {{ grafico|tojson }};
+  const estilo = getComputedStyle(document.documentElement);
+  new Chart(document.getElementById("grafico-preco"), {
+    type: "line",
+    data: { labels: dados.rotulos, datasets: [{ label: "Fechamento", data: dados.valores, borderColor: estilo.getPropertyValue("--c-primary").trim(), tension: 0.25, pointRadius: 2 }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false } },
+      scales: { x: { grid: { display: false } }, y: { grid: { color: estilo.getPropertyValue("--c-line").trim() } } } },
+  });
+</script>
+{% endif %}
+{% endblock %}

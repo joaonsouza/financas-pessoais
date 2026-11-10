@@ -1,0 +1,44 @@
+{% set cat = categorias_por_id.get(l.categoria_id) %}
+{% set conta = contas_por_id.get(l.conta_id) %}
+{% set rotulo_sem_categoria = {"transferencia": "Transferência", "pagamento_fatura": "Pagamento de fatura", "ajuste": "Ajuste de saldo"}.get(l.tipo, "Sem categoria") %}
+{% set icone_tipo = {"transferencia": "arrow-left-right", "pagamento_fatura": "credit-card", "ajuste": "sliders-horizontal", "receita": "arrow-down-left"}.get(l.tipo, "circle-dashed") %}
+<div id="lanc-{{ l.id }}" class="group flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 px-3 sm:px-4 py-2 hover:bg-page/60 transition-colors duration-150">
+  <input type="checkbox" name="ids" value="{{ l.id }}" form="lote"
+         data-valor="{{ l.valor if l.tipo in ('receita', 'despesa') else 0 }}" aria-label="Selecionar {{ l.descricao }}"
+         class="size-5 shrink-0 rounded accent-[var(--c-primary)] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+  <button type="button" hx-post="/lancamentos/{{ l.id }}/alternar" hx-target="#lanc-{{ l.id }}" hx-swap="outerHTML"
+          aria-label="{{ 'Marcar como pendente' if l.status == 'efetivado' else 'Marcar como efetivado' }}"
+          class="size-11 shrink-0 flex items-center justify-center rounded-full cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+    <span class="size-6 rounded-full border-2 flex items-center justify-center transition-colors duration-150 {{ 'bg-income border-income text-white' if l.status == 'efetivado' else 'border-ink-muted/50 text-transparent group-hover:border-income' }}">
+      <i data-lucide="check" class="size-4"></i>
+    </span>
+  </button>
+  {% if cat %}
+    <span class="size-10 rounded-full shrink-0 flex items-center justify-center" style="background: {{ cat.cor }}26; color: {{ cat.cor }}"><i data-lucide="{{ cat.icone or 'tag' }}" class="size-5"></i></span>
+  {% else %}
+    <span class="size-10 rounded-full shrink-0 flex items-center justify-center {{ 'bg-income/15 text-income' if l.tipo == 'receita' else 'bg-primary-soft text-primary' if l.tipo in ('transferencia', 'pagamento_fatura', 'ajuste') else 'bg-page text-ink-muted' }}"><i data-lucide="{{ icone_tipo }}" class="size-5"></i></span>
+  {% endif %}
+  <div class="flex-1 min-w-[8rem]">
+    <div class="font-medium truncate flex items-center gap-1.5">
+      <span class="truncate">{{ l.descricao }}{% if l.parcela_total %} ({{ l.parcela_num }}/{{ l.parcela_total }}){% endif %}</span>
+      {% if l.caixinha %}<span class="shrink-0 rounded-full bg-page px-2 leading-5 text-xs text-ink-muted">{{ l.caixinha.nome }}</span>{% endif %}
+      {% if l.meta_id %}<i data-lucide="target" class="size-4 shrink-0 text-primary" title="Ligado a um objetivo" aria-label="Ligado a um objetivo"></i>{% endif %}
+      {% if l.ignorar %}<span class="inline-flex items-center gap-1 shrink-0 rounded-full bg-page text-ink-muted text-xs font-medium px-2 py-0.5" title="Não entra em saldos nem totais"><i data-lucide="eye-off" class="size-3.5"></i>ignorada</span>{% endif %}
+      {% if l.recorrencia_id %}<i data-lucide="repeat" class="size-4 shrink-0 text-primary" title="Recorrente" aria-label="Recorrente"></i>{% endif %}
+    </div>
+    <div class="text-xs text-ink-muted truncate">
+      {{ cat.nome if cat else rotulo_sem_categoria }} · {{ conta.nome if conta else "" }}{% for t in l.tags %} · #{{ t.nome }}{% endfor %}
+    </div>
+  </div>
+  <div class="font-semibold tabular-nums shrink-0 {{ 'text-income' if l.valor > 0 else 'text-expense' }}">{{ l.valor|reais }}</div>
+  <div class="ml-auto sm:ml-0 flex items-center shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 [@media(hover:none)]:opacity-100">
+    <button type="button" hx-get="/lancamentos/{{ l.id }}/editar" hx-target="#modal" aria-label="Editar lançamento"
+            class="size-11 rounded-xl flex items-center justify-center text-ink-muted hover:text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="pencil" class="size-4"></i></button>
+    {% if l.tipo in ('receita', 'despesa') and conta and conta.tipo != 'cartao' and not l.grupo_parcela_id and not l.recorrencia_id %}
+    <button type="button" hx-get="/lancamentos/{{ l.id }}/converter" hx-target="#modal" aria-label="Converter em transferência" title="Converter em transferência"
+            class="size-11 rounded-xl flex items-center justify-center text-ink-muted hover:text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="arrow-left-right" class="size-4"></i></button>
+    {% endif %}
+    <button type="button" {% if l.recorrencia_id or l.grupo_parcela_id %}hx-get="/lancamentos/{{ l.id }}/excluir" hx-target="#modal"{% else %}hx-post="/lancamentos/{{ l.id }}/excluir" hx-confirm="Excluir este lançamento?"{% endif %} aria-label="Excluir lançamento"
+            class="size-11 rounded-xl flex items-center justify-center text-ink-muted hover:text-expense hover:bg-expense/10 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="trash-2" class="size-4"></i></button>
+  </div>
+</div>

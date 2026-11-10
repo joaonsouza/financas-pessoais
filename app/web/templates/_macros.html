@@ -1,0 +1,68 @@
+{# Barra de progresso acessível; a cor segue a faixa (ok | atencao | estourado). #}
+{% macro barra(pct, faixa="ok", rotulo="") %}
+  {% set cor = {"ok": "bg-income", "atencao": "bg-warning", "estourado": "bg-expense"}[faixa] %}
+  <div class="h-2.5 rounded-full bg-page overflow-hidden" role="progressbar" aria-label="{{ rotulo }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ [pct, 100]|min }}">
+    <div class="h-full rounded-full {{ cor }}" style="width: {{ [[pct, 0]|max, 100]|min }}%"></div>
+  </div>
+{% endmacro %}
+
+{% macro texto_faixa(faixa) %}{{ {"ok": "dentro do limite", "atencao": "atenção: acima de 80%", "estourado": "limite atingido"}[faixa] }}{% endmacro %}
+
+{# Escolha de ícone e cor (radios `icone` e `cor`), com o ícone marcado pintado na cor escolhida. #}
+{% macro seletor_aparencia(icones, cores, icone, cor) %}
+  <fieldset x-data="{ icone: {{ icone|tojson|forceescape }}, cor: {{ cor|tojson|forceescape }} }" class="space-y-2">
+    <legend class="sr-only">Aparência</legend>
+    <div class="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Ícone">
+      {% for i in icones %}
+        <label class="size-9 rounded-full flex items-center justify-center cursor-pointer border transition-colors duration-150"
+               :class="icone === '{{ i }}' ? 'border-transparent text-white' : 'border-line text-ink-muted hover:text-ink'"
+               :style="icone === '{{ i }}' ? 'background:' + cor : ''">
+          <input type="radio" name="icone" value="{{ i }}" x-model="icone" class="sr-only" {% if icone == i %}checked{% endif %}>
+          <i data-lucide="{{ i }}" class="size-4" aria-hidden="true"></i><span class="sr-only">{{ i }}</span>
+        </label>
+      {% endfor %}
+    </div>
+    <div class="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Cor">
+      {% for c in cores %}
+        <label class="size-7 rounded-full cursor-pointer ring-offset-2 ring-offset-card" style="background: {{ c }}" :class="cor === '{{ c }}' && 'ring-2 ring-ink'">
+          <input type="radio" name="cor" value="{{ c }}" x-model="cor" class="sr-only" {% if cor == c %}checked{% endif %}><span class="sr-only">{{ c }}</span>
+        </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+{% endmacro %}
+
+{# Avatar redondo de conta/cartão: sigla e cores do banco (app/web/marcas.py) ou inicial na cor da conta. #}
+{% macro avatar(nome, cor=None, tamanho="size-9", texto="text-xs") %}
+  {% set m = marca(nome, cor) %}
+  <span class="{{ tamanho }} {{ texto }} rounded-full shrink-0 flex items-center justify-center font-bold tracking-tight leading-none" style="background: {{ m.fundo }}; color: {{ m.frente }}" aria-hidden="true">{{ m.sigla }}</span>
+{% endmacro %}
+
+{# atalho para outra tela no painel lateral: ícone redondo, rótulo, valor e seta (formato do card de parcelas) #}
+{% macro card_atalho(href, icone, rotulo, valor, detalhe) %}
+<a href="{{ href }}" class="bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5 flex items-start gap-3 hover:border-primary/40 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+  <span class="size-11 rounded-full shrink-0 flex items-center justify-center bg-primary-soft text-primary"><i data-lucide="{{ icone }}" class="size-5"></i></span>
+  <div class="flex-1 min-w-0">
+    <div class="text-sm text-ink-muted">{{ rotulo }}</div>
+    <div class="text-xl font-semibold tabular-nums whitespace-nowrap">{{ valor }}</div>
+    <div class="text-xs text-ink-muted">{{ detalhe }}</div>
+  </div>
+  <i data-lucide="chevron-right" class="size-5 shrink-0 self-center text-ink-muted" aria-hidden="true"></i>
+</a>
+{% endmacro %}
+
+{# Organizar (organizar.js): moldura com setas sobre o item enquanto organiza; o item precisa de `relative`. #}
+{% macro alca_organizar(rotulo) %}
+<div x-show="organizando" x-cloak class="absolute inset-0 z-10 rounded-[20px] bg-primary/5 border-2 border-dashed border-primary/50 cursor-move flex items-start justify-end gap-1 p-2">
+  <button type="button" @click="mover($el, -1)" aria-label="Subir {{ rotulo }}" title="Subir" class="size-11 rounded-xl bg-card border border-line flex items-center justify-center text-primary hover:bg-primary-soft cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="arrow-up" class="size-5"></i></button>
+  <button type="button" @click="mover($el, 1)" aria-label="Descer {{ rotulo }}" title="Descer" class="size-11 rounded-xl bg-card border border-line flex items-center justify-center text-primary hover:bg-primary-soft cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="arrow-down" class="size-5"></i></button>
+</div>
+{% endmacro %}
+
+{# Aviso do modo organizar, com "Concluir" (desliga todas as listas da página). Usar dentro de uma lista organizável. #}
+{% macro aviso_organizar(classe="") %}
+<div x-show="organizando" x-cloak class="{{ classe }} rounded-xl bg-primary-soft text-primary px-4 py-2 text-sm flex items-center gap-3">
+  <i data-lucide="move" class="size-4 shrink-0"></i><span class="flex-1">Arraste ou use as setas para mudar a ordem. É salva na hora.</span>
+  <button type="button" @click="$dispatch('organizar', 'sair')" class="h-9 px-3 rounded-lg bg-primary text-white font-medium hover:bg-primary-strong cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Concluir</button>
+</div>
+{% endmacro %}

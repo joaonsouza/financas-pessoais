@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block titulo %}Importar{% endblock %}
+{% block cabecalho %}Importar{% endblock %}
+{% block conteudo %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set botao_sec = "inline-flex items-center gap-2 bg-primary-soft text-primary rounded-xl px-4 h-11 font-medium hover:bg-primary-soft/70 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set rotulo_css = "flex flex-col gap-1 text-sm font-medium text-ink-muted" %}
+
+{% if erro %}
+  <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+
+{% if feita %}
+  <div role="status" class="mb-6 rounded-xl bg-income/10 border border-income/30 text-income px-4 py-3 flex items-start gap-2">
+    <i data-lucide="check" class="size-5 shrink-0 mt-0.5"></i>
+    <span>Importação concluída: {{ feita.qtd_novas }} nova{{ "s" if feita.qtd_novas != 1 }}, {{ feita.qtd_conciliadas }} conciliada{{ "s" if feita.qtd_conciliadas != 1 }}, {{ feita.qtd_duplicadas }} duplicada{{ "s" if feita.qtd_duplicadas != 1 }} ignorada{{ "s" if feita.qtd_duplicadas != 1 }}.</span>
+  </div>
+{% endif %}
+
+{% if token and entrada and (escolher_conta is not none or (erro and pode_ia)) %}
+  <section class="{{ cartao_css }} p-5 mb-6" aria-labelledby="titulo-pendente">
+    <h2 id="titulo-pendente" class="font-semibold flex items-center gap-2"><i data-lucide="file-text" class="size-5 text-primary"></i>{{ entrada.nome }}</h2>
+    {% if escolher_conta is not none and escolher_conta %}
+      <form method="post" action="/importar/{{ token }}/ler" class="mt-4 flex flex-wrap items-end gap-3">
+        <label class="{{ rotulo_css }}">De qual conta ou cartão é este arquivo?
+          <select name="conta_id" required class="{{ campo }} min-w-64">
+            <option value="">Escolha…</option>
+            {% for c in escolher_conta %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+          </select>
+        </label>
+        <button class="{{ botao }}"><i data-lucide="arrow-right" class="size-4"></i>Continuar</button>
+      </form>
+      <p class="text-sm text-ink-muted mt-3">Na primeira vez, o app guarda a identificação do arquivo e passa a sugerir esta conta sozinho.</p>
+    {% endif %}
+    {% if pode_ia and erro %}
+      <form method="post" action="/importar/{{ token }}/ler" class="mt-4 flex flex-wrap items-center gap-3">
+        <input type="hidden" name="ia" value="1">
+        <button class="{{ botao_sec }}"><i data-lucide="sparkles" class="size-4"></i>Tentar com IA</button>
+        <span class="text-sm text-ink-muted">Só acontece quando você clica. O texto do PDF vai à API da Anthropic com CPF, contas e cartões mascarados; PDF de imagem vai sem máscara.{% if not ia_configurada %} Configure a chave em Configurações, aba IA.{% endif %}</span>
+      </form>
+    {% endif %}
+  </section>
+{% endif %}
+
+{% if of_configurado and open_finance_ativo %}
+  <section class="{{ cartao_css }} p-5 mb-6 flex flex-wrap items-center gap-x-6 gap-y-3" aria-labelledby="titulo-openfinance">
+    <div class="min-w-0 flex-1">
+      <h2 id="titulo-openfinance" class="font-semibold flex items-center gap-2"><i data-lucide="landmark" class="size-5 text-primary"></i>Open Finance</h2>
+      <p class="text-sm text-ink-muted mt-1">Traz as transações novas dos bancos conectados na Pluggy. Você revisa por conta antes de gravar.</p>
+    </div>
+    <form method="post" action="/importar/sincronizar"><button class="{{ botao }}"><i data-lucide="refresh-cw" class="size-4"></i>Sincronizar Open Finance</button></form>
+  </section>
+{% endif %}
+
+{% if cartoes %}
+  <section class="mb-6" aria-labelledby="titulo-cartoes">
+    <h2 id="titulo-cartoes" class="font-semibold mb-3 flex items-center gap-2"><i data-lucide="credit-card" class="size-5 text-primary"></i>Faturas por cartão</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {% for k in cartoes %}
+        <form method="post" action="/importar" enctype="multipart/form-data" class="{{ cartao_css }} p-5 flex flex-col gap-3"
+              x-data="{ arrastando: false, nome: '' }">
+          <input type="hidden" name="conta_id" value="{{ k.conta.id }}">
+          <div class="font-medium truncate">{{ k.conta.nome }}</div>
+          {% if k.ultima is none %}
+            <div role="alert" class="rounded-xl bg-expense/10 border border-expense/30 text-expense px-3 py-2 text-sm flex items-start gap-2"><i data-lucide="alert-triangle" class="size-4 shrink-0 mt-0.5"></i><span>Nenhuma importação ainda.</span></div>
+          {% elif k.atrasado %}
+            <div role="alert" class="rounded-xl bg-expense/10 border border-expense/30 text-expense px-3 py-2 text-sm flex items-start gap-2"><i data-lucide="alert-triangle" class="size-4 shrink-0 mt-0.5"></i><span>Sem importar há {{ k.dias }} dias. Última em {{ k.ultima.strftime("%d/%m/%Y") }}.</span></div>
+          {% else %}
+            <div class="text-sm text-ink-muted">Última importação: {{ k.ultima.strftime("%d/%m/%Y") }}{% if k.dias == 0 %} (hoje){% elif k.dias == 1 %} (ontem){% else %} (há {{ k.dias }} dias){% endif %}</div>
+          {% endif %}
+          <label class="flex flex-col items-center justify-center gap-1 text-center rounded-2xl border-2 border-dashed px-3 py-6 cursor-pointer transition-colors duration-150 focus-within:ring-4 focus-within:ring-primary/30"
+                 :class="arrastando ? 'border-primary bg-primary-soft' : 'border-line hover:border-primary'"
+                 @dragover.prevent="arrastando = true" @dragleave.prevent="arrastando = false"
+                 @drop.prevent="arrastando = false; $refs.arquivo.files = $event.dataTransfer.files; nome = $refs.arquivo.files[0]?.name || ''">
+            <i data-lucide="upload" class="size-6 text-primary"></i>
+            <span class="text-sm font-medium break-all" x-text="nome || 'Arraste ou clique para escolher'">Arraste ou clique para escolher</span>
+            <input type="file" name="arquivo" accept=".ofx,.csv,.pdf,.xlsx" required x-ref="arquivo" class="sr-only"
+                   @change="nome = $refs.arquivo.files[0]?.name || ''">
+          </label>
+          <button class="{{ botao }} justify-center"><i data-lucide="file-search" class="size-4"></i>Ler e revisar</button>
+        </form>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+<section class="{{ cartao_css }} p-5 mb-6" aria-labelledby="titulo-envio">
+  <h2 id="titulo-envio" class="font-semibold mb-4">Enviar arquivo</h2>
+  <form method="post" action="/importar" enctype="multipart/form-data" class="flex flex-col gap-4"
+        x-data="{ arrastando: false, nome: '' }">
+    <label class="flex flex-col items-center justify-center gap-2 text-center rounded-2xl border-2 border-dashed px-4 py-10 cursor-pointer transition-colors duration-150 focus-within:ring-4 focus-within:ring-primary/30"
+           :class="arrastando ? 'border-primary bg-primary-soft' : 'border-line hover:border-primary'"
+           @dragover.prevent="arrastando = true" @dragleave.prevent="arrastando = false"
+           @drop.prevent="arrastando = false; $refs.arquivo.files = $event.dataTransfer.files; nome = $refs.arquivo.files[0]?.name || ''">
+      <i data-lucide="upload" class="size-8 text-primary"></i>
+      <span class="font-medium" x-text="nome || 'Arraste o arquivo aqui ou clique para escolher'">Arraste o arquivo aqui ou clique para escolher</span>
+      <span class="text-sm text-ink-muted">OFX, CSV, PDF (fatura ou extrato) ou a planilha da fatura do Itaú (Excel, inclusive a fatura aberta). O arquivo não é salvo no computador, só lido.</span>
+      <input type="file" name="arquivo" accept=".ofx,.csv,.pdf,.xlsx" required x-ref="arquivo" class="sr-only"
+             @change="nome = $refs.arquivo.files[0]?.name || ''">
+    </label>
+    <div class="flex flex-wrap items-end gap-4">
+      <label class="{{ rotulo_css }}">Conta ou cartão (opcional)
+        <select name="conta_id" class="{{ campo }} min-w-64">
+          <option value="">Descobrir pelo arquivo</option>
+          {% for c in contas %}<option value="{{ c.id }}">{{ c.nome }}{{ " (cartão)" if c.tipo == "cartao" }}</option>{% endfor %}
+        </select>
+      </label>
+      {% if ia_configurada %}
+        <label class="flex items-center gap-2 min-h-11 text-sm cursor-pointer"><input type="checkbox" name="ia_categorias" class="size-5 rounded accent-[var(--c-primary)] cursor-pointer"> Usar IA para categorias que eu não reconhecer</label>
+      {% endif %}
+      <button class="{{ botao }}"><i data-lucide="file-search" class="size-4"></i>Ler e revisar</button>
+    </div>
+  </form>
+</section>
+
+{% if sugestoes %}
+  <section class="mb-6" aria-labelledby="titulo-assinaturas">
+    <h2 id="titulo-assinaturas" class="font-semibold mb-3 flex items-center gap-2"><i data-lucide="repeat" class="size-5 text-primary"></i>Cadastrar assinatura?</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {% for x in sugestoes %}
+        <form method="post" action="/importar/recorrencia" class="{{ cartao_css }} p-5 flex flex-col gap-2">
+          <input type="hidden" name="descricao" value="{{ x.descricao }}">
+          <input type="hidden" name="conta_id" value="{{ x.conta_id }}">
+          <div class="font-medium truncate">{{ x.descricao }}</div>
+          <div class="text-sm text-ink-muted">{{ contas_por_id[x.conta_id].nome }} · {{ x.meses|length }} meses seguidos</div>
+          <div class="flex items-baseline gap-2"><span class="text-xl font-semibold text-expense tabular-nums">{{ x.valor|reais }}</span><span class="text-sm text-ink-muted">por mês</span></div>
+          <div class="text-sm text-ink-muted tabular-nums">Custo anual: {{ x.custo_anual|reais }}</div>
+          <button class="{{ botao_sec }} mt-2 justify-center"><i data-lucide="repeat" class="size-4"></i>Cadastrar assinatura</button>
+        </form>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+<section class="{{ cartao_css }} overflow-hidden" aria-labelledby="titulo-historico">
+  <h2 id="titulo-historico" class="font-semibold p-5 pb-3">Histórico de importações</h2>
+  {% if historico %}
+    <ul class="divide-y divide-line">
+      {% for h in historico %}
+        <li class="px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div class="flex-1 min-w-48">
+            <div class="font-medium truncate {{ 'line-through text-ink-muted' if h.desfeita }}">{{ h.arquivo_nome }}</div>
+            <div class="text-sm text-ink-muted">{{ h.criada_em.strftime("%d/%m/%Y %H:%M") }} · {{ contas_por_id[h.conta_id].nome }}</div>
+          </div>
+          <div class="text-sm text-ink-muted tabular-nums">{{ h.qtd_novas }} novas · {{ h.qtd_conciliadas }} conciliadas · {{ h.qtd_duplicadas }} duplicadas</div>
+          {% if h.desfeita %}
+            <span class="text-sm text-ink-muted">Desfeita</span>
+          {% else %}
+            <form method="post" action="/importar/{{ h.id }}/desfazer" onsubmit="return confirm('Desfazer esta importação? Os lançamentos criados serão apagados e os conciliados voltam a pendentes.')">
+              <button class="inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-ink-muted hover:text-expense hover:bg-expense/10 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="undo-2" class="size-4"></i>Desfazer</button>
+            </form>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="px-5 pb-5 text-ink-muted">Nenhuma importação ainda.</p>
+  {% endif %}
+</section>
+{% endblock %}

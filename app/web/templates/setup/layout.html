@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Primeiro uso · Finanças</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/vendor/lucide.min.js"></script>
+  <script src="/static/mascara.js"></script>
+</head>
+<body class="bg-page text-ink min-h-screen font-sans">
+  <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
+    <div class="flex items-center gap-3 mb-1">
+      <span class="size-10 rounded-xl bg-primary text-white flex items-center justify-center"><i data-lucide="wallet" class="size-5"></i></span>
+      <h1 class="text-2xl font-semibold">Primeiro uso</h1>
+    </div>
+    <p class="text-ink-muted mb-6">{% block passo %}{% endblock %}</p>
+    {% if erro %}
+      <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2">
+        <i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span>
+      </div>
+    {% endif %}
+    {% block conteudo %}{% endblock %}
+  </main>
+  <script>document.addEventListener("DOMContentLoaded", function () { if (window.lucide) lucide.createIcons(); });</script>
+</body>
+</html>

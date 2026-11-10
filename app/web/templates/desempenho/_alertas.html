@@ -1,0 +1,64 @@
+<section id="alertas" class="bg-card rounded-[20px] border border-line p-5 shadow-[0_4px_6px_rgba(0,0,0,0.04)]" aria-labelledby="titulo-central-alertas">
+  <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center gap-2">
+      <span class="size-8 rounded-xl bg-warning/10 text-warning flex items-center justify-center">
+        <i data-lucide="bell" class="size-5"></i>
+      </span>
+      <div>
+        <h2 id="titulo-central-alertas" class="font-semibold text-ink">Central de Alertas e Riscos</h2>
+        <p class="text-xs text-ink-muted">Diagnósticos atuais e antecipação de impactos futuros</p>
+      </div>
+    </div>
+    <span class="text-xs font-medium px-2.5 py-1 bg-page rounded-full border border-line text-ink-muted">
+      {{ alertas|length }} ativo{{ "s" if alertas|length != 1 }}
+    </span>
+  </div>
+
+  {% if alertas %}
+    <ul class="divide-y divide-line text-sm">
+      {% for a in alertas %}
+        {% set cores = {
+          "perigo": "bg-expense/10 text-expense border-expense/20",
+          "atencao": "bg-warning/10 text-warning border-warning/20",
+          "info": "bg-primary-soft text-primary border-primary/20"
+        } %}
+        {% set icones = {
+          "perigo": "alert-octagon",
+          "atencao": "alert-triangle",
+          "info": "info"
+        } %}
+        <li class="flex flex-wrap items-center justify-between gap-3 py-3">
+          <div class="flex items-start gap-3 min-w-48 flex-1">
+            <span class="size-8 rounded-full flex items-center justify-center shrink-0 {{ cores[a.nivel] }}">
+              <i data-lucide="{{ icones[a.nivel] }}" class="size-4"></i>
+            </span>
+            <div>
+              <span class="block font-medium text-ink">{{ a.titulo }}</span>
+              <span class="block text-xs text-ink-muted mt-0.5">{{ a.texto }}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <a href="{{ a.acao_url }}" class="inline-flex items-center gap-1 h-9 px-3 rounded-xl text-xs font-medium text-primary bg-primary-soft hover:bg-primary hover:text-white transition-colors duration-150 cursor-pointer">
+              Ver ação <i data-lucide="arrow-right" class="size-3.5"></i>
+            </a>
+            <form method="post" action="/planejamento/alertas/dispensar">
+              <input type="hidden" name="mes" value="{{ mes }}">
+              <input type="hidden" name="chave" value="{{ a.chave }}">
+              <input type="hidden" name="voltar" value="/desempenho?mes={{ mes }}#alertas">
+              <button type="submit" class="inline-flex items-center gap-1 h-9 px-2.5 rounded-xl text-xs text-ink-muted hover:bg-page transition-colors cursor-pointer" title="Dispensar alerta">
+                <i data-lucide="x" class="size-3.5"></i>
+                <span class="hidden sm:inline">Dispensar</span>
+              </button>
+            </form>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="py-8 text-center text-ink-muted space-y-1">
+      <i data-lucide="check-circle-2" class="size-8 text-income mx-auto"></i>
+      <div class="text-sm font-medium text-ink">Nenhum alerta pendente</div>
+      <div class="text-xs">Suas finanças não apresentam pontos críticos para este mês.</div>
+    </div>
+  {% endif %}
+</section>

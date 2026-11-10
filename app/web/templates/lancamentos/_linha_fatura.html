@@ -1,0 +1,15 @@
+{% set rotulo_status = {"paga": "Paga", "paga_parcial": "Paga em parte"}.get(l.status_fatura, "Aberta") %}
+<a href="/cartoes/{{ l.cartao_id }}?fatura={{ l.competencia }}" id="fatura-{{ l.fatura_id }}"
+   class="group flex items-center gap-x-3 px-3 sm:px-4 py-2 min-h-[3.75rem] hover:bg-page/60 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-primary/30">
+  <span class="size-5 shrink-0" aria-hidden="true"></span>
+  <span class="size-11 shrink-0 flex items-center justify-center">
+    <span class="size-6 rounded-full border-2 flex items-center justify-center {{ 'bg-income border-income text-white' if l.status_fatura == 'paga' else 'border-ink-muted/50 text-transparent' }}"><i data-lucide="check" class="size-4"></i></span>
+  </span>
+  <span class="size-10 rounded-full shrink-0 flex items-center justify-center bg-primary-soft text-primary"><i data-lucide="credit-card" class="size-5"></i></span>
+  <div class="flex-1 min-w-[8rem]">
+    <div class="font-medium truncate">Fatura {{ l.cartao_nome }}</div>
+    <div class="text-xs text-ink-muted truncate">{{ l.qtd }} {{ "compra" if l.qtd == 1 else "compras" }} · vence {{ l.data|data_br }} · {{ rotulo_status }}</div>
+  </div>
+  <div class="font-semibold tabular-nums shrink-0 text-expense">{{ l.valor|reais }}</div>
+  <i data-lucide="chevron-right" class="size-5 shrink-0 text-ink-muted group-hover:text-primary transition-colors duration-150" aria-label="Ver fatura"></i>
+</a>

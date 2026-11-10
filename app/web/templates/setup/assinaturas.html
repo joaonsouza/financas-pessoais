@@ -1,0 +1,37 @@
+{% extends "setup/layout.html" %}
+{% block passo %}Passo 2 de 2 — assinaturas (viram recorrências mensais){% endblock %}
+{% block conteudo %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+<form method="post" action="/setup/assinaturas" class="space-y-6">
+  <section class="bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5 overflow-x-auto">
+    <input type="hidden" name="n_assinaturas" value="{{ linhas|length }}">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-ink-muted"><th class="py-2 w-14 font-medium">Usar</th><th class="font-medium">Nome</th><th class="font-medium">Valor (R$)</th><th class="font-medium">Dia</th><th class="font-medium">Conta ou cartão</th></tr>
+      </thead>
+      <tbody>
+        {% for a in linhas %}{% set i = loop.index0 %}
+        <tr class="border-t border-line">
+          <td class="py-2"><input type="checkbox" name="assinatura_incluir_{{ i }}" aria-label="Usar assinatura" {% if a.incluir %}checked{% endif %} class="size-5 rounded accent-[var(--c-primary)] cursor-pointer"></td>
+          <td class="pr-2"><input name="assinatura_nome_{{ i }}" value="{{ a.nome }}" aria-label="Nome" class="{{ campo }} w-52"></td>
+          <td class="pr-2"><input data-mascara="reais" name="assinatura_valor_{{ i }}" value="{{ a.valor }}" inputmode="decimal" aria-label="Valor" class="{{ campo }} w-28 text-right tabular-nums"></td>
+          <td class="pr-2"><input name="assinatura_dia_{{ i }}" value="{{ a.dia }}" inputmode="numeric" aria-label="Dia" class="{{ campo }} w-20"></td>
+          <td>
+            <select name="assinatura_conta_{{ i }}" aria-label="Conta ou cartão" class="{{ campo }}">
+              <option value="">Escolha…</option>
+              {% for c in contas %}
+                <option value="{{ c.id }}" {% if a.conta == c.id|string %}selected{% endif %}>{{ c.nome }}</option>
+              {% endfor %}
+            </select>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <div class="flex justify-between">
+    <a href="/" class="inline-flex items-center px-6 h-11 rounded-xl text-ink-muted hover:bg-card transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Pular</a>
+    <button class="inline-flex items-center gap-2 bg-primary hover:bg-primary-strong text-white px-6 h-11 rounded-xl font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="check" class="size-4"></i>Concluir</button>
+  </div>
+</form>
+{% endblock %}

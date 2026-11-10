@@ -1,0 +1,32 @@
+{# Projeção de consumo e plano para chegar no alvo da reserva. Variáveis: m (Meta), projecao (ou None), plano. #}
+{% set prog_css = "inline-flex items-center h-9 px-3 rounded-xl border border-primary text-primary text-sm font-medium hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% if projecao %}
+  <div class="mt-4 rounded-2xl border border-expense/30 bg-expense/10 p-4 text-sm text-expense space-y-1.5">
+    <p class="flex items-start gap-2 font-semibold"><i data-lucide="trending-down" class="size-5 shrink-0"></i><span>No ritmo atual ({{ projecao.base }}), {% if projecao.acaba_em %}a reserva acaba em ~{{ ("%.1f"|format(projecao.meses_ate_acabar)|replace(".", ","))|replace(",0", "") }} meses ({{ projecao.acaba_em }}){% else %}a reserva não cobre o déficit de um mês{% endif %}.</span></p>
+    <p>Para parar de consumir, corte {{ projecao.cortar|reais }}/mês{% if projecao.sugestoes %}. Comece por{% for nome, cid, valor in projecao.sugestoes %}{{ " e" if loop.last and not loop.first else ("," if not loop.first else "") }} <a href="/lancamentos?mes={{ hoje.strftime("%Y-%m") }}&amp;tipo=despesa&amp;categoria={{ cid }}" class="underline font-medium hover:opacity-80">{{ nome }} ({{ valor|reais }})</a>{% endfor %}{% endif %}.</p>
+  </div>
+{% endif %}
+{% if plano.primeiro_parar or plano.degraus or plano.sugestao_12 %}
+  <div class="mt-4 border-t border-line pt-4 text-sm">
+    <h3 class="font-semibold flex items-center gap-1.5"><i data-lucide="route" class="size-4 text-primary"></i>Plano para chegar no alvo</h3>
+    {% if plano.primeiro_parar %}
+      <p class="mt-2 font-medium text-expense flex items-center gap-1.5"><i data-lucide="octagon-alert" class="size-4"></i>Primeiro pare de consumir a reserva</p>
+    {% else %}
+      {% if plano.degraus %}
+        <ul class="mt-2 space-y-0.5" aria-label="Degraus que faltam">
+          {% for d in plano.degraus %}
+            <li>{{ d.rotulo }}{% if d.data_estimada %} em <span class="font-medium tabular-nums">~{{ d.data_estimada }}</span>{% else %} <span class="text-ink-muted">sem data: não há sobra nem aporte para guardar</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+        <p class="mt-1 text-xs text-ink-muted">Ritmo de {{ plano.ritmo|reais }}/mês ({{ plano.base }}).</p>
+      {% endif %}
+      {% if plano.sugestao_12 %}
+        <p class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2">Para chegar no alvo:
+          <span class="tabular-nums font-medium">{{ plano.sugestao_12|reais }}/mês</span> em 12 meses <a href="/planejamento/metas/{{ m.id }}?editar=1&amp;aporte={{ plano.sugestao_12 }}" class="{{ prog_css }}">Programar</a>
+          <span aria-hidden="true">·</span>
+          <span class="tabular-nums font-medium">{{ plano.sugestao_24|reais }}/mês</span> em 24 meses <a href="/planejamento/metas/{{ m.id }}?editar=1&amp;aporte={{ plano.sugestao_24 }}" class="{{ prog_css }}">Programar</a>
+        </p>
+      {% endif %}
+    {% endif %}
+  </div>
+{% endif %}

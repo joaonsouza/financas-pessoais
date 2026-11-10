@@ -1,0 +1,38 @@
+{# Reserva de emergência (fica no Planejamento). Variáveis: m (Meta), r (Reserva), mensal (aporte mensal ou None), projecao, plano, cartao_css. #}
+{% from "_macros.html" import barra %}
+{% from "objetivos/_macros.html" import icone_meta %}
+{% set base_texto = {"3_meses": "média dos últimos 3 meses completos", "n_meses": "média dos meses completos disponíveis (menos de 3)", "previsto": "previsto: recorrências e orçamentos essenciais", "alvo": "seu alvo ÷ " ~ r.multiplicador ~ " meses"} %}
+<section id="reserva" class="{{ cartao_css }} p-5 {{ '' if m.ativa else 'opacity-60' }}" aria-labelledby="reserva-{{ m.id }}">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="flex items-center gap-3">
+      {{ icone_meta(m) }}
+      <div>
+        <h2 id="reserva-{{ m.id }}" class="font-semibold">{{ m.nome }}</h2>
+        <p class="text-sm text-ink-muted">{% if r.personalizado %}Alvo definido por você (sugestão: {{ r.sugerido|reais }}){% else %}Alvo: gasto essencial × {{ r.multiplicador }} meses{% endif %}</p>
+      </div>
+    </div>
+    <a href="/planejamento/metas/{{ m.id }}" class="inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Guardar, retirar e alterar<i data-lucide="chevron-right" class="size-4"></i></a>
+  </div>
+  <div class="mt-4 grid grid-cols-3 gap-3">
+    <div><div class="text-sm text-ink-muted">Guardado</div><div class="text-xl font-semibold tabular-nums">{{ r.atual|reais }}</div></div>
+    <div><div class="text-sm text-ink-muted">Alvo da reserva</div><div class="text-xl font-semibold tabular-nums">{{ r.alvo|reais }}</div></div>
+    <div><div class="text-sm text-ink-muted">Meses de cobertura</div><div class="text-xl font-semibold tabular-nums">{{ ("%.1f"|format(r.meses_que_aguento)|replace(".", ",")) if r.meses_que_aguento is not none else "—" }}</div></div>
+  </div>
+  <div class="mt-4">{{ barra((r.atual * 100 // r.alvo) if r.alvo else 0, "ok", "Progresso da reserva") }}</div>
+  <p class="mt-2 text-sm text-ink-muted">{{ "Mês de referência" if r.personalizado else "Gasto essencial mensal" }}: <span class="tabular-nums font-medium text-ink">{{ r.gasto_essencial|reais }}</span> · base: {{ base_texto[r.base] }}.</p>
+  <ol class="mt-4 grid grid-cols-2 gap-3" aria-label="Degraus da reserva">
+    {% for d in r.degraus %}
+      {% set proximo = r.proximo_degrau and r.proximo_degrau.rotulo == d.rotulo %}
+      <li class="rounded-2xl border p-3 text-sm {{ 'border-primary bg-primary-soft' if proximo else 'border-line' }}">
+        <div class="flex items-center gap-1.5 font-medium">
+          {% if d.atingido %}<i data-lucide="check-circle" class="size-4 text-income"></i><span class="sr-only">Atingido:</span>{% else %}<i data-lucide="circle" class="size-4 text-ink-muted"></i>{% endif %}
+          {{ d.rotulo }}
+        </div>
+        <div class="tabular-nums text-ink-muted">{{ d.valor|reais }}</div>
+        {% if proximo %}<div class="text-xs font-medium text-primary mt-1">Próximo degrau</div>{% endif %}
+      </li>
+    {% endfor %}
+  </ol>
+  {% if mensal %}<p class="mt-3 text-sm text-ink-muted flex items-center gap-1.5"><i data-lucide="repeat" class="size-4"></i>{{ "Guarda automático" if m.aporte_automatico else "Pague primeiro" }}: {{ mensal|reais }} todo dia {{ m.dia_pagar }}.</p>{% endif %}
+  {% include "objetivos/_reserva_plano.html" %}
+</section>

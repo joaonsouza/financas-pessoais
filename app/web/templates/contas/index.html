@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block titulo %}Contas{% endblock %}
+{% block cabecalho %}Contas{% endblock %}
+{% block acoes_topo %}
+{% set redondo = "size-11 rounded-full bg-card border border-line flex items-center justify-center text-ink-muted hover:text-primary hover:border-primary transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+<button type="button" x-data @click="$dispatch('nova-conta')" aria-label="Nova conta" title="Nova conta" class="{{ redondo }}"><i data-lucide="plus" class="size-5"></i></button>
+<button type="button" x-data @click="$dispatch('organizar')" aria-label="Organizar contas" title="Organizar contas e o painel" class="{{ redondo }}"><i data-lucide="move" class="size-5"></i></button>
+<a href="/desempenho?mes={{ mes }}#patrimonio" aria-label="Evolução do patrimônio" title="Evolução do patrimônio" class="{{ redondo }}"><i data-lucide="chart-line" class="size-5"></i></a>
+<div x-data="{ menu: false }" class="relative" @click.outside="menu = false" @keydown.escape="menu = false">
+  <button type="button" @click="menu = !menu" aria-haspopup="menu" :aria-expanded="menu" aria-label="Mais opções" title="Mais opções" class="{{ redondo }}"><i data-lucide="more-vertical" class="size-5"></i></button>
+  <div x-show="menu" x-cloak role="menu" class="absolute right-0 top-full z-30 mt-1 w-56 bg-card border border-line rounded-xl shadow-xl py-1 text-sm">
+    <a role="menuitem" href="/contas?mes={{ mes }}{{ '' if ver_arquivadas else '&arquivadas=1#arquivadas' }}" class="flex items-center gap-2 px-3 h-11 hover:bg-page cursor-pointer"><i data-lucide="archive" class="size-4 text-ink-muted"></i>{{ "Esconder arquivadas" if ver_arquivadas else "Ver arquivadas" }} ({{ arquivadas|length }})</a>
+  </div>
+</div>
+{% endblock %}
+{% block conteudo %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% if erro %}
+  <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set cor_valor = {1: "text-income", -1: "text-expense", 0: "text-ink-muted"} %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  {# contas em cartões; o último cria uma conta nova #}
+  <div x-data="organizarLista('conta', '/contas/ordem')" @organizar.window="alternar($event)" class="lg:col-span-2 lg:col-start-1 lg:row-start-1 grid grid-cols-1 md:grid-cols-2 gap-4 content-start">
+    {{ m.aviso_organizar("md:col-span-2") }}
+    {% for x in saldos if x.entra_saldo_liquido %}
+    {% include "contas/_cartao_conta.html" %}
+    {% endfor %}
+
+    <div x-data="{ criando: false }" @nova-conta.window="criando = true; $nextTick(() => { $el.scrollIntoView({ block: 'center' }); $el.querySelector('input[name=nome]').focus() })" class="{{ cartao_css }} p-5 flex flex-col">
+      <button type="button" x-show="!criando" @click="criando = true" class="flex-1 min-h-40 flex flex-col items-center justify-center gap-3 rounded-xl text-ink-muted hover:text-primary transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+        <span class="size-12 rounded-full border-2 border-current flex items-center justify-center"><i data-lucide="plus" class="size-6"></i></span>
+        <span class="font-semibold">Nova conta</span>
+      </button>
+      <form x-show="criando" x-cloak method="post" action="/contas?mes={{ mes }}" class="grid grid-cols-2 gap-3 text-sm">
+        <label class="col-span-2 flex flex-col gap-1 font-medium text-ink-muted">Nome<input name="nome" required class="{{ campo }}"></label>
+        <label class="flex flex-col gap-1 font-medium text-ink-muted">Tipo
+          <select name="tipo" class="{{ campo }}"><option value="corrente">Corrente</option><option value="investimento">Investimento</option></select>
+        </label>
+        <label class="flex flex-col gap-1 font-medium text-ink-muted">Moeda
+          <select name="moeda" class="{{ campo }}"><option value="BRL">Real</option><option value="USD">Dólar (fica fora do saldo líquido)</option></select>
+        </label>
+        <label class="flex flex-col gap-1 font-medium text-ink-muted">Saldo inicial<input data-mascara="reais" name="saldo" inputmode="decimal" class="{{ campo }}"></label>
+        <label class="flex flex-col gap-1 font-medium text-ink-muted">Em<input type="date" name="data" value="{{ hoje.isoformat() }}" class="{{ campo }}"></label>
+        <label class="flex items-center gap-2 min-h-11 cursor-pointer self-end"><input type="checkbox" name="sl" checked class="size-5 rounded accent-[var(--c-primary)] cursor-pointer"> Saldo líquido</label>
+        <div class="col-span-2 flex justify-end gap-2"><button type="button" @click="criando = false" class="h-11 px-4 rounded-xl text-ink-muted hover:bg-page cursor-pointer">Cancelar</button><button class="{{ botao }}"><i data-lucide="plus" class="size-4"></i>Criar</button></div>
+      </form>
+    </div>
+  </div>
+  {% set fora = saldos|rejectattr("entra_saldo_liquido")|list %}
+  {% if fora %}
+  <section class="lg:col-span-2 lg:col-start-1" aria-labelledby="titulo-fora">
+    <h2 id="titulo-fora" class="font-semibold mb-1 flex items-center gap-2"><i data-lucide="eye-off" class="size-4 text-ink-muted"></i>Fora do saldo líquido</h2>
+    <p class="text-sm text-ink-muted mb-3">Investimentos e caixinhas que você não conta como dinheiro disponível. Somam {{ fora_atual|reais }}.</p>
+    <div x-data="organizarLista('conta', '/contas/ordem')" @organizar.window="alternar($event)" class="grid grid-cols-1 md:grid-cols-2 gap-4 content-start">
+    {% for x in fora %}
+    {% include "contas/_cartao_conta.html" %}
+    {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if conciliacao %}
+  {% set pendentes = conciliacao|selectattr("diferenca")|list %}
+  <section id="conciliar" class="lg:col-span-2 lg:col-start-1 scroll-mt-6" aria-labelledby="titulo-conciliar">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-1">
+      <h2 id="titulo-conciliar" class="font-semibold flex items-center gap-2"><i data-lucide="scale" class="size-4 text-ink-muted"></i>Conciliar investimentos</h2>
+      {% if pendentes %}
+      <form method="post" action="/contas/conciliar-investimentos?mes={{ mes }}">
+        <button class="inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-10 text-sm font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="check-check" class="size-4"></i>Conciliar todas</button>
+      </form>
+      {% endif %}
+    </div>
+    <p class="text-sm text-ink-muted mb-3">Valor de mercado das posições guardadas em cada caixinha contra o saldo dela. Conciliar lança a diferença como "Rendimento investimentos" (ajuste: não entra em receitas, despesas nem no teto).</p>
+    <div class="bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] overflow-x-auto">
+      <table class="w-full text-sm min-w-[640px]">
+        <thead class="text-xs text-ink-muted">
+          <tr class="border-b border-line">
+            <th scope="col" class="text-left font-medium px-5 py-2">Local</th>
+            <th scope="col" class="text-right font-medium px-3 py-2">Posições</th>
+            <th scope="col" class="text-right font-medium px-3 py-2">Caixinha</th>
+            <th scope="col" class="text-right font-medium px-3 py-2">Diferença</th>
+            <th scope="col" class="px-5 py-2"><span class="sr-only">Conciliar</span></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-line">
+          {% for l in conciliacao %}
+          <tr>
+            <td class="px-5 py-3">{{ l.conta.nome }}{% if l.caixinha %} <span class="text-ink-muted">· {{ l.caixinha.nome }}</span>{% endif %}</td>
+            <td class="px-3 py-3 text-right tabular-nums">{{ l.posicoes|reais }}</td>
+            <td class="px-3 py-3 text-right tabular-nums">{{ l.saldo|reais if l.saldo is not none else "—" }}</td>
+            <td class="px-3 py-3 text-right tabular-nums font-medium {{ 'text-income' if (l.diferenca or 0) > 0 else ('text-expense' if (l.diferenca or 0) < 0 else 'text-ink-muted') }}">
+              {% if l.diferenca is none %}—{% elif l.diferenca > 0 %}+{{ l.diferenca|reais }}{% else %}{{ l.diferenca|reais }}{% endif %}
+            </td>
+            <td class="px-5 py-2 text-right whitespace-nowrap">
+              {% if l.caixinha is none %}
+                <span class="text-xs text-ink-muted" title="Posições fora de caixinha se misturam ao dinheiro livre da conta">sem caixinha</span>
+              {% elif l.diferenca %}
+                <form method="post" action="/contas/conciliar-investimentos?mes={{ mes }}">
+                  <input type="hidden" name="caixinha_id" value="{{ l.caixinha.id }}">
+                  <button aria-label="Conciliar {{ l.conta.nome }} · {{ l.caixinha.nome }}" class="inline-flex items-center gap-1.5 bg-primary-soft text-primary rounded-xl px-3 h-9 text-sm font-medium hover:opacity-80 transition-opacity duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="check" class="size-4"></i>Conciliar</button>
+                </form>
+              {% else %}
+                <span class="inline-flex items-center gap-1 text-xs text-income"><i data-lucide="check" class="size-3.5"></i>Em dia</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if ver_arquivadas %}
+  <section id="arquivadas" class="lg:col-span-2 lg:col-start-1" aria-labelledby="titulo-arquivadas">
+    <h2 id="titulo-arquivadas" class="font-semibold mb-3 flex items-center gap-2"><i data-lucide="archive" class="size-4 text-ink-muted"></i>Contas arquivadas</h2>
+    <ul class="{{ cartao_css }} divide-y divide-line text-sm">
+      {% for c in arquivadas %}
+        <li class="flex items-center gap-3 px-5 py-3">
+          {{ m.avatar(c.nome, c.cor) }}
+          <span class="flex-1 min-w-0 font-medium truncate">{{ c.nome }}</span>
+          <form method="post" action="/contas/{{ c.id }}/desarquivar?mes={{ mes }}">
+            <button class="inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="archive-restore" class="size-4"></i>Desarquivar</button>
+          </form>
+        </li>
+      {% else %}
+        <li class="px-5 py-4 text-ink-muted">Nenhuma conta arquivada.</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {# resumo: no PC na coluna da direita, no celular no topo #}
+  {% set cores_resumo = {"primary": "bg-primary-soft text-primary", "warning": "bg-warning/15 text-warning", "income": "bg-income/15 text-income", "expense": "bg-expense/15 text-expense"} %}
+  {% set paineis = {} %}
+  {% for id, rotulo, valor, icone, cor in [("liquido", "Saldo líquido atual", liquido_atual, "landmark", "primary"), ("dia", "Previsto hoje", liquido_dia, "calendar-check", "warning"), ("mes", "Previsto fim do mês", liquido_mes, "calendar-clock", "income" if liquido_mes >= 0 else "expense")] %}
+  {% set html %}
+    <div class="{{ cartao_css }} p-5 flex items-center gap-3">
+      <span class="size-11 rounded-full shrink-0 flex items-center justify-center {{ cores_resumo['expense' if valor < 0 else cor] }}"><i data-lucide="{{ icone }}" class="size-5"></i></span>
+      <div><div class="text-sm text-ink-muted">{{ rotulo }}</div><div class="text-2xl font-semibold tabular-nums {{ 'text-expense' if valor < 0 }}">{{ valor|reais }}</div></div>
+    </div>
+  {% endset %}
+  {% set _ = paineis.update({id: html}) %}
+  {% endfor %}
+  {# soma de todas as contas, dentro e fora do saldo líquido #}
+  {% set html %}
+    <div class="{{ cartao_css }} p-5">
+      <div class="flex items-center gap-3">
+        <span class="size-11 rounded-full shrink-0 flex items-center justify-center {{ cores_resumo['expense' if total_mes < 0 else 'primary'] }}"><i data-lucide="wallet" class="size-5"></i></span>
+        <div><div class="text-sm text-ink-muted">Total em todas as contas · previsto fim do mês</div><div class="text-2xl font-semibold tabular-nums {{ 'text-expense' if total_mes < 0 }}">{{ total_mes|reais }}</div></div>
+      </div>
+      <div class="mt-3 pt-3 border-t border-line flex items-center justify-between text-sm">
+        <span class="text-ink-muted">Total atual</span>
+        <span class="font-semibold tabular-nums {{ 'text-expense' if total_atual < 0 }}">{{ total_atual|reais }}</span>
+      </div>
+    </div>
+  {% endset %}
+  {% set _ = paineis.update({"total": html}) %}
+  {% set rotulos_painel = {"liquido": "Saldo líquido atual", "dia": "Previsto hoje", "mes": "Previsto fim do mês", "total": "Total em todas as contas"} %}
+  <aside x-data="organizarLista('painel', '/contas/painel/ordem')" @organizar.window="alternar($event)" class="painel-lateral order-first lg:order-none lg:col-start-3 lg:row-start-1 lg:row-span-2 space-y-4">
+    {% for id in ordem_painel %}
+    <div data-painel="{{ id }}" class="relative" :draggable="organizando" @dragstart="iniciar($event)" @dragover="sobre($event)" @drop.prevent @dragend="soltar()">
+      {{ paineis[id] }}
+      {{ m.alca_organizar(rotulos_painel[id]) }}
+    </div>
+    {% endfor %}
+  </aside>
+</div>
+{% endblock %}

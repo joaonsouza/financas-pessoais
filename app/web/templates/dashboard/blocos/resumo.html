@@ -1,0 +1,61 @@
+{# Faixa de 4 cartões: saldo (com alternar atual/previsto), receitas, despesas e cartão de crédito #}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5 flex flex-col gap-3 cursor-pointer hover:border-primary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{# Mês futuro abre no saldo previsto; mês atual e passados, no saldo real #}
+{% set futuro = mes > mes_hoje() %}
+<section aria-label="Resumo do mês">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div x-data="{ previsto: {{ 'true' if futuro else 'false' }}, negAtual: {{ 'true' if liquido_atual < 0 else 'false' }}, negPrevisto: {{ 'true' if liquido_mes < 0 else 'false' }} }"
+         :class="(previsto ? negPrevisto : negAtual) ? 'bg-[#B91C1C]' : 'bg-primary'"
+         class="relative text-white rounded-[20px] shadow-[0_4px_6px_rgba(0,0,0,0.04)] hover:shadow-lg p-5 flex flex-col gap-3 cursor-pointer transition-[color,background-color,box-shadow] duration-150">
+      <div class="flex items-center gap-2">
+        <span class="size-9 rounded-full bg-white/15 flex items-center justify-center shrink-0"><i data-lucide="landmark" class="size-5" x-show="!(previsto ? negPrevisto : negAtual)"></i><i data-lucide="triangle-alert" class="size-5" x-show="previsto ? negPrevisto : negAtual" x-cloak></i></span>
+        <span class="text-sm text-white/80 flex-1" x-text="(previsto ? 'Saldo previsto' : 'Saldo atual') + ((previsto ? negPrevisto : negAtual) ? ' · negativo' : '')">Saldo atual</span>
+        <a href="/contas?mes={{ mes }}" aria-label="Ver contas" class="after:absolute after:inset-0 after:rounded-[20px] size-11 -my-2 -mr-2 rounded-full flex items-center justify-center hover:bg-white/15 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/40"><i data-lucide="chevron-right" class="size-5"></i></a>
+      </div>
+      <div>
+        <div class="text-2xl font-semibold tabular-nums" x-show="!previsto"{% if futuro %} x-cloak{% endif %}>{{ liquido_atual|reais }}</div>
+        <div class="text-2xl font-semibold tabular-nums" x-show="previsto"{% if not futuro %} x-cloak{% endif %}>{{ liquido_mes|reais }}</div>
+      </div>
+      <button type="button" @click="previsto = !previsto" :aria-pressed="previsto"
+              class="relative z-10 self-start inline-flex items-center gap-1.5 h-9 px-3 -ml-1 rounded-xl text-xs font-medium bg-white/15 hover:bg-white/25 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/40">
+        <i data-lucide="repeat" class="size-4"></i><span x-text="previsto ? 'ver atual' : 'ver previsto (fim do mês)'">ver previsto (fim do mês)</span>
+      </button>
+    </div>
+
+    <a href="/lancamentos?mes={{ mes }}&tipo=receita" class="{{ cartao_css }}">
+      <div class="flex items-center gap-2 text-sm text-ink-muted">
+        <span class="size-9 rounded-full bg-income/15 text-income flex items-center justify-center shrink-0"><i data-lucide="arrow-up" class="size-5"></i></span>
+        <span class="flex-1">Receitas</span><i data-lucide="chevron-right" class="size-5"></i>
+      </div>
+      <div>
+        <div class="text-2xl font-semibold text-income tabular-nums">{{ totais.receitas_efetivado|reais }}</div>
+        <div class="text-xs text-ink-muted tabular-nums">previsto {{ totais.receitas_projetado|reais }}</div>
+      </div>
+    </a>
+
+    <a href="/lancamentos?mes={{ mes }}&tipo=despesa" class="{{ cartao_css }}">
+      <div class="flex items-center gap-2 text-sm text-ink-muted">
+        <span class="size-9 rounded-full bg-expense/15 text-expense flex items-center justify-center shrink-0"><i data-lucide="arrow-down" class="size-5"></i></span>
+        <span class="flex-1">Despesas</span><i data-lucide="chevron-right" class="size-5"></i>
+      </div>
+      <div>
+        <div class="text-2xl font-semibold text-expense tabular-nums">{{ totais.despesas_efetivado|reais }}</div>
+        <div class="text-xs text-ink-muted tabular-nums" title="Compras no cartão contam no mês em que a fatura vence">previsto {{ totais.despesas_projetado|reais }}</div>
+      </div>
+    </a>
+
+    <a href="/cartoes?mes={{ mes }}" class="{{ cartao_css }}">
+      <div class="flex items-center gap-2 text-sm text-ink-muted">
+        <span class="size-9 rounded-full bg-card-accent/15 text-card-accent flex items-center justify-center shrink-0"><i data-lucide="credit-card" class="size-5"></i></span>
+        <span class="flex-1">Cartão de crédito</span><i data-lucide="chevron-right" class="size-5"></i>
+      </div>
+      <div>
+        <div class="text-2xl font-semibold text-card-accent tabular-nums">{{ total_cartoes|reais }}</div>
+        <div class="text-xs text-ink-muted tabular-nums">{% if cartoes %}vencem em {{ mes|nome_mes }} · disponível {{ disponivel_cartoes|reais }}{% else %}nenhum cartão{% endif %}</div>
+      </div>
+    </a>
+  </div>
+  <div class="mt-2 flex justify-end">
+    <a href="/desempenho?mes={{ mes }}" class="inline-flex items-center gap-1 h-11 px-3 rounded-xl text-sm font-medium text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Meu desempenho<i data-lucide="arrow-right" class="size-4"></i></a>
+  </div>
+</section>

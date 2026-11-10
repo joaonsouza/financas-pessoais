@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Finanças{% endblock %} · Finanças</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="mask-icon" href="/static/favicon.svg" color="#1E40AF">
+  <meta name="theme-color" content="#1E40AF">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/static/app.css?v={{ versao_css() }}">
+  <script src="/static/vendor/htmx.min.js"></script>
+  <script>
+    htmx.config.responseHandling = [
+      {code: "204", swap: false},
+      {code: "[23]..", swap: true},
+      {code: "422", swap: true},
+      {code: "[45]..", swap: false, error: true},
+    ];
+  </script>
+  <script src="/static/seletor_categoria.js"></script>
+  <script defer src="/static/vendor/alpine.min.js"></script>
+  <script src="/static/vendor/lucide.min.js"></script>
+  <script src="/static/mascara.js"></script>
+  <script src="/static/organizar.js"></script>
+  {% block head %}{% endblock %}
+</head>
+<body class="bg-page text-ink min-h-screen font-sans" x-data="{ menu: false }" @keydown.escape.window="menu = false">
+  {% if modo_demo() %}
+  {# cópia de demonstração (iniciar_demo.bat): ninguém confunde com o app de verdade #}
+  <div role="status" class="fixed top-2 left-1/2 -translate-x-1/2 z-[70] rounded-full bg-warning text-white px-4 py-1 text-xs font-semibold uppercase tracking-wide shadow-lg pointer-events-none">Demonstração · dados fictícios</div>
+  {% endif %}
+  {% set icones_menu = {"Dashboard": "layout-dashboard", "Lançamentos": "arrow-left-right", "Contas": "landmark", "Cartões": "credit-card", "Planejamento": "target", "Objetivos": "flag", "Desempenho": "activity", "Relatórios": "bar-chart-3", "Investimentos": "trending-up", "Importar": "upload", "Configurações": "settings"} %}
+
+  <div class="lg:hidden sticky top-0 z-30 bg-card border-b border-line h-14 px-4 flex items-center gap-3">
+    <button type="button" @click="menu = true" aria-label="Abrir menu"
+            class="size-11 -ml-2 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+      <i data-lucide="menu" class="size-5"></i>
+    </button>
+    <span class="font-semibold">Finanças</span>
+  </div>
+
+  <div x-show="menu" x-cloak @click="menu = false" class="lg:hidden fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm"></div>
+
+  <aside class="fixed inset-y-0 left-0 z-50 w-60 bg-card border-r border-line p-4 flex flex-col gap-1 transition-transform duration-200 -translate-x-full lg:translate-x-0"
+         :class="menu ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'">
+    <div class="flex items-center justify-between mb-6 px-2 h-11">
+      <div class="flex items-center gap-2 text-lg font-semibold">
+        <span class="size-9 rounded-xl bg-primary text-white flex items-center justify-center"><i data-lucide="wallet" class="size-5"></i></span>
+        Finanças
+      </div>
+      <button type="button" @click="menu = false" aria-label="Fechar menu"
+              class="lg:hidden size-11 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+        <i data-lucide="x" class="size-5"></i>
+      </button>
+    </div>
+    <nav class="flex flex-col gap-1" aria-label="Principal">
+    {% for rotulo, caminho in menu %}
+      {% set ativo = request.url.path == caminho or (caminho != "/" and request.url.path.startswith(caminho)) %}
+      <a href="{{ caminho }}{% if mes is defined %}?mes={{ mes }}{% endif %}"
+         {% if ativo %}aria-current="page"{% endif %}
+         class="flex items-center gap-3 px-3 h-11 rounded-xl text-sm font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 {{ 'bg-primary-soft text-primary' if ativo else 'text-ink-muted hover:bg-page hover:text-ink' }}">
+        <i data-lucide="{{ icones_menu.get(rotulo, 'circle') }}" class="size-5"></i>{{ rotulo }}
+      </a>
+    {% endfor %}
+    </nav>
+  </aside>
+
+  <div class="lg:pl-60 min-w-0">
+    <header class="bloco-central max-w-7xl mx-auto px-4 sm:px-8 pt-6 pb-2 flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-2xl font-semibold">{% block cabecalho %}{% endblock %}</h1>
+      <div class="painel-lateral flex flex-wrap items-center gap-2">
+      {% block acoes_topo %}{% endblock %}
+      {% if mes is defined and not esconder_mes_topo %}
+      <nav class="flex items-center gap-1 bg-card border border-line rounded-full p-1" aria-label="Selecionar mês">
+        <a href="?mes={{ somar_meses(mes, -1) }}" aria-label="Mês anterior"
+           class="size-11 rounded-full flex items-center justify-center text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="chevron-left" class="size-5"></i></a>
+        <span class="font-medium w-36 shrink-0 text-center whitespace-nowrap">{{ mes|nome_mes }}</span>
+        {# "Hoje" ocupa espaço sempre (invisível no mês atual) para o seletor não mudar de tamanho #}
+        {% set no_mes_atual = mes == mes_hoje() %}
+        <a href="?mes={{ mes_hoje() }}" title="Ir para {{ mes_hoje()|nome_mes }}"{% if no_mes_atual %} aria-hidden="true" tabindex="-1"{% endif %}
+           class="{{ 'invisible ' if no_mes_atual }}h-9 px-3 rounded-full flex items-center text-xs font-medium text-primary bg-primary-soft hover:bg-primary hover:text-white transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Hoje</a>
+        <a href="?mes={{ somar_meses(mes, 1) }}" aria-label="Próximo mês"
+           class="size-11 rounded-full flex items-center justify-center text-ink-muted hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="chevron-right" class="size-5"></i></a>
+      </nav>
+      {% endif %}
+      </div>
+    </header>
+    <main class="bloco-central max-w-7xl mx-auto px-4 sm:px-8 py-6 pb-28">
+      {% block conteudo %}{% endblock %}
+    </main>
+  </div>
+
+  <div x-data="{ aberto: false }" @keydown.escape.window="aberto = false" class="fixed bottom-6 right-4 sm:right-8 z-30 flex flex-col items-end gap-3">
+    <div x-show="aberto" x-cloak @click.outside="aberto = false" class="flex flex-col items-end gap-2">
+      {% for tipo, rotulo, cor, icone in [("despesa", "Despesa", "text-expense", "arrow-up-right"), ("receita", "Receita", "text-income", "arrow-down-left"), ("transferencia", "Transferência", "text-primary", "arrow-left-right"), ("cartao", "Despesa no cartão", "text-[#7C3AED]", "credit-card")] %}
+        <button type="button" hx-get="/lancamentos/novo?tipo={{ tipo }}" hx-target="#modal" @click="aberto = false"
+                class="flex items-center gap-3 bg-card border border-line rounded-2xl pl-3 pr-4 h-12 shadow-[0_8px_24px_rgba(0,0,0,0.12)] text-sm font-medium text-ink hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+          <i data-lucide="{{ icone }}" class="size-5 {{ cor }}"></i>{{ rotulo }}
+        </button>
+      {% endfor %}
+      <button type="button" hx-get="/investimentos/operacoes/nova" hx-target="#modal" @click="aberto = false"
+              class="flex items-center gap-3 bg-card border border-line rounded-2xl pl-3 pr-4 h-12 shadow-[0_8px_24px_rgba(0,0,0,0.12)] text-sm font-medium text-ink hover:bg-page transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+        <i data-lucide="trending-up" class="size-5 text-income"></i>Investimento
+      </button>
+    </div>
+    <button type="button" @click="aberto = !aberto" aria-label="Novo lançamento" :aria-expanded="aberto"
+            class="size-14 rounded-full bg-primary hover:bg-primary-strong text-white shadow-[0_10px_30px_rgba(30,64,175,0.35)] flex items-center justify-center transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+      <i data-lucide="plus" class="size-6"></i>
+    </button>
+  </div>
+
+  <div id="modal"></div>
+  <script>
+    function fecharModal() {
+      var modal = document.getElementById("modal");
+      var recarregar = modal.querySelector("[data-recarregar]");
+      modal.innerHTML = "";
+      if (recarregar) location.reload();
+    }
+    function renderIcones() { if (window.lucide) lucide.createIcons(); }
+    document.addEventListener("DOMContentLoaded", renderIcones);
+    document.body.addEventListener("htmx:afterSwap", renderIcones);
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

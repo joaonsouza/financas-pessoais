@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% from "_macros.html" import barra %}
+{% from "objetivos/_macros.html" import barra_meta, icone_meta %}
+{% block titulo %}{{ m.nome }} · Planejamento{% endblock %}
+{% block cabecalho %}{% if m.tipo == "reserva_emergencia" %}<a href="/planejamento#reserva" class="text-ink-muted hover:text-ink">Planejamento</a>{% else %}<a href="/planejamento#metas" class="text-ink-muted hover:text-ink">Planejamento</a>{% endif %} <span class="text-ink-muted">/</span> {{ m.nome }}{% endblock %}
+{% block conteudo %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set botao = "inline-flex items-center justify-center gap-2 rounded-xl px-4 h-11 font-semibold transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set mov = m.tipo != "economia_mensal" %}
+
+<div x-data="{ acao: '', editando: {{ 'true' if editando else 'false' }} }">
+{% if erro %}
+  <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <section class="{{ cartao_css }} p-6 lg:col-span-2 space-y-5 {{ '' if m.ativa else 'opacity-70' }}" aria-labelledby="titulo-meta">
+    <div class="flex flex-wrap items-center gap-3">
+      {{ icone_meta(m, "size-14", "size-7") }}
+      <div class="flex-1 min-w-0">
+        <h2 id="titulo-meta" class="text-xl font-semibold">{{ m.nome }}</h2>
+        <p class="text-sm text-ink-muted">{{ tipos[m.tipo] }}{% if m.tipo == "objetivo" %} · {{ horizontes[m.horizonte] }}{% endif %}{% if not m.ativa %} · inativa{% endif %}
+          · {% if conta_meta %}caixinha em <a href="/contas/{{ conta_meta.id }}" class="text-primary hover:underline">{{ conta_meta.nome }}</a>{% elif mov %}guardado fora do app{% endif %}</p>
+      </div>
+      {% if p.concluido %}<span class="inline-flex items-center gap-1.5 rounded-full bg-income/10 text-income px-3 h-8 text-sm font-semibold"><i data-lucide="party-popper" class="size-4"></i>Concluído</span>{% endif %}
+    </div>
+
+    {% if m.tipo == "economia_mensal" %}
+      {% if economia %}
+        <p class="text-sm tabular-nums">Neste mês: <span class="font-semibold">{{ economia.realizado|reais }}</span> realizado de {{ economia.meta|reais }} · previsto {{ economia.projetado|reais }}</p>
+        {{ barra((economia.realizado * 100 // economia.meta) if economia.meta > 0 and economia.realizado > 0 else 0, "ok" if economia.atingida_projetado else "atencao", "Meta de economia") }}
+      {% endif %}
+    {% else %}
+      <div>
+        {{ barra_meta(m, p.pct, "Progresso de " ~ m.nome) }}
+        <div class="mt-2 flex items-baseline justify-between text-sm tabular-nums">
+          <span><span class="font-semibold">{{ p.atual|reais }}</span> <span class="text-ink-muted">guardados</span></span>
+          <span class="font-semibold" style="color: {{ m.cor }}">{{ "%.2f"|format(p.pct)|replace(".", ",") }}%</span>
+        </div>
+      </div>
+      <dl class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <div><dt class="text-ink-muted flex items-center gap-1.5"><i data-lucide="trophy" class="size-4"></i>Alvo</dt><dd class="text-lg font-semibold tabular-nums">{{ p.alvo|reais }}</dd>
+          {% if r %}<dd class="text-xs text-ink-muted">{{ "definido por você" if r.personalizado else "sugerido" }}{% if r.personalizado %} · sugestão {{ r.sugerido|reais }}{% endif %}</dd>{% endif %}</div>
+        <div><dt class="text-ink-muted">Falta</dt><dd class="text-lg font-semibold tabular-nums">{{ p.falta|reais }}</dd></div>
+        <div><dt class="text-ink-muted flex items-center gap-1.5"><i data-lucide="calendar" class="size-4"></i>Prazo</dt>
+          <dd class="text-lg font-semibold tabular-nums {{ 'text-expense' if m.prazo and m.prazo < hoje and not p.concluido }}">{{ m.prazo|data_br if m.prazo else "—" }}</dd></div>
+        <div><dt class="text-ink-muted">Ritmo necessário</dt><dd class="text-lg font-semibold tabular-nums">{{ p.necessario_mes|reais if p.necessario_mes else "—" }}</dd>
+          {% if p.necessario_mes and m.prazo %}<dd class="text-xs text-ink-muted">por mês, {{ p.meses_restantes }} {{ "mês" if p.meses_restantes == 1 else "meses" }}</dd>{% endif %}</div>
+      </dl>
+      {% if agendado > 0 %}<p class="text-sm text-ink-muted flex items-center gap-1.5"><i data-lucide="clock" class="size-4"></i>{{ agendado|reais }} agendados nos lançamentos (ainda pendentes).</p>{% endif %}
+      {% if mensal %}<p class="text-sm text-ink-muted flex items-center gap-1.5"><i data-lucide="repeat" class="size-4"></i>{{ "Guarda automático" if m.aporte_automatico else "Pague primeiro" }}: {{ mensal|reais }} todo dia {{ m.dia_pagar }}{% if m.repete_anual %}, todo ano{% endif %}{% if m.aporte_como_despesa %} · conta como despesa{% endif %}.</p>{% endif %}
+      {% if r %}
+        <p class="text-sm text-ink-muted">Meses de cobertura: <span class="font-semibold text-ink tabular-nums">{{ ("%.1f"|format(r.meses_que_aguento)|replace(".", ",")) if r.meses_que_aguento is not none else "—" }}</span> · {{ "mês de referência" if r.personalizado else "gasto essencial" }} {{ r.gasto_essencial|reais }}{% if r.personalizado %} (seu alvo ÷ {{ r.multiplicador }}){% endif %}</p>
+        {% include "objetivos/_reserva_plano.html" %}
+      {% endif %}
+
+      <div class="flex flex-wrap gap-2 pt-1">
+        <button type="button" @click="acao = 'guardar'" class="{{ botao }} bg-primary text-white hover:bg-primary-strong"><i data-lucide="plus" class="size-4"></i>Guardar dinheiro</button>
+        <button type="button" @click="acao = 'retirar'" {% if p.atual <= 0 %}disabled{% endif %} class="{{ botao }} border border-line text-ink hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed"><i data-lucide="minus" class="size-4"></i>Retirar</button>
+      </div>
+    {% endif %}
+  </section>
+
+  <aside class="{{ cartao_css }} p-6 space-y-3 h-fit">
+    <h2 class="font-semibold">Ações</h2>
+    <button type="button" @click="editando = !editando" :aria-expanded="editando" class="w-full {{ botao }} justify-start text-primary hover:bg-primary-soft"><i data-lucide="pencil" class="size-4"></i>Alterar</button>
+    <form method="post" action="/planejamento/metas/{{ m.id }}/excluir"
+          onsubmit="return confirm('Excluir este objetivo? Os lançamentos já feitos continuam; os aportes futuros são cancelados.')">
+      <button class="w-full {{ botao }} justify-start text-expense hover:bg-expense/10"><i data-lucide="trash-2" class="size-4"></i>Excluir</button>
+    </form>
+    <p class="text-xs text-ink-muted">Excluir não apaga dinheiro: os lançamentos já feitos continuam; só os aportes mensais futuros são cancelados.</p>
+  </aside>
+</div>
+
+<section x-show="editando" x-cloak class="{{ cartao_css }} p-6 mt-6" aria-label="Alterar {{ m.nome }}">
+  {% with acao="/planejamento/metas/" ~ m.id, voltar="detalhe" %}{% include "objetivos/_form_meta.html" %}{% endwith %}
+</section>
+
+{% if mov %}
+<section class="{{ cartao_css }} p-6 mt-6" aria-labelledby="titulo-historico">
+  <h2 id="titulo-historico" class="font-semibold mb-1">Histórico</h2>
+  <p class="text-sm text-ink-muted mb-4">{% if conta_meta %}Extrato da caixinha {{ m.nome }} em <a href="/contas/{{ conta_meta.id }}" class="text-primary hover:underline">{{ conta_meta.nome }}</a>.{% else %}Lançamentos ligados a este objetivo.{% endif %}</p>
+  {% if historico or (not conta_meta and m.valor_manual) %}
+    <table class="w-full text-sm">
+      <thead class="text-left text-ink-muted"><tr><th class="py-2 font-medium">Data</th><th class="py-2 font-medium">Descrição</th><th class="py-2 font-medium">Situação</th><th class="py-2 font-medium text-right">Valor</th></tr></thead>
+      <tbody>
+        {% for h in historico %}
+          <tr class="border-t border-line">
+            <td class="py-2 tabular-nums whitespace-nowrap">{{ h.data|data_br }}</td>
+            <td class="py-2">{{ h.descricao }}{% if h.caixinha %} <span class="text-ink-muted">· {{ h.caixinha }}</span>{% endif %}</td>
+            <td class="py-2 text-ink-muted">{{ "Remanejado (só divisão)" if h.divisao else ("Pendente" if h.pendente else "Efetivado") }}</td>
+            <td class="py-2 text-right tabular-nums font-medium {{ 'text-income' if h.valor > 0 else 'text-expense' }}">{{ "+" if h.valor > 0 }}{{ h.valor|reais }}</td>
+          </tr>
+        {% endfor %}
+        {% if not conta_meta and m.valor_manual %}
+          <tr class="border-t border-line text-ink-muted">
+            <td class="py-2">—</td><td class="py-2">Já guardado antes (informado ao criar)</td><td class="py-2"></td>
+            <td class="py-2 text-right tabular-nums">+{{ m.valor_manual|reais }}</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="text-sm text-ink-muted">Nada guardado ainda. Use "Guardar dinheiro": o valor entra nos lançamentos e no saldo.</p>
+  {% endif %}
+</section>
+
+{# Guardar / retirar (modal) #}
+<div x-show="acao" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="acao = ''">
+  <form method="post" :action="'/planejamento/metas/{{ m.id }}/' + acao" @click.outside="acao = ''" x-data="{ data: '{{ hoje.isoformat() }}' }"
+        role="dialog" aria-modal="true" aria-labelledby="titulo-mov"
+        class="w-full max-w-md bg-card rounded-[20px] border border-line shadow-2xl p-6 space-y-4 text-sm">
+    <div class="flex items-center justify-between">
+      <h2 id="titulo-mov" class="text-lg font-semibold" x-text="acao === 'guardar' ? 'Guardar dinheiro' : 'Retirar dinheiro'">Guardar dinheiro</h2>
+      <button type="button" @click="acao = ''" aria-label="Fechar" class="size-11 -mr-2 rounded-xl flex items-center justify-center text-ink-muted hover:bg-page cursor-pointer"><i data-lucide="x" class="size-5"></i></button>
+    </div>
+    <label class="block font-medium text-ink-muted">Valor
+      <input data-mascara="reais" name="valor" required inputmode="decimal" placeholder="0,00" value="{{ m.valor_mensal_pagar|reais_input if m.valor_mensal_pagar else '' }}" class="{{ campo }} w-full text-right tabular-nums text-lg"></label>
+    <label class="block font-medium text-ink-muted"><span x-text="acao === 'guardar' ? 'Sai de' : 'Vai para'">Sai de</span>
+      <select name="conta_id" class="{{ campo }} w-full">
+        {% for c in contas_mov %}<option value="{{ c.id }}" {% if c.id == m.conta_origem_id %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="block font-medium text-ink-muted">Data
+      <input type="date" name="data" x-model="data" class="{{ campo }} w-full"></label>
+    <p class="text-xs text-ink-muted" x-show="data > '{{ hoje.isoformat() }}'" x-cloak>Data futura: fica agendado (pendente) nos lançamentos.</p>
+    {% if m.tipo == "reserva_emergencia" %}
+      <fieldset x-show="acao === 'retirar'" x-cloak class="rounded-xl border border-warning/40 bg-warning/10 p-3 space-y-1">
+        <legend class="px-1 font-medium">Antes de usar a reserva: o gasto é…</legend>
+        {% for chave, rotulo in checklist %}
+          <label class="flex items-center gap-2 min-h-9 cursor-pointer"><input type="checkbox" name="checklist" value="{{ chave }}" class="size-5 rounded accent-[var(--c-primary)]"> {{ rotulo }}?</label>
+        {% endfor %}
+        <p class="text-xs text-ink-muted">Ao retirar, o app cria o objetivo "Repor reserva" com prazo de 6 meses.</p>
+      </fieldset>
+    {% endif %}
+    <p class="text-xs text-ink-muted" x-text="acao === 'guardar'
+        ? '{{ "Vira transferência para a caixinha em " ~ conta_meta.nome ~ " nos lançamentos." if conta_meta else "Vira despesa na categoria Objetivos nos lançamentos (sai do saldo)." }}'
+        : '{{ "Vira transferência de " ~ conta_meta.nome ~ " nos lançamentos." if conta_meta else "Vira receita na categoria Objetivos nos lançamentos (volta para o saldo)." }}'"></p>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" @click="acao = ''" class="h-11 px-4 rounded-xl font-medium text-ink-muted hover:bg-page cursor-pointer">Cancelar</button>
+      <button class="h-11 px-5 rounded-xl bg-primary text-white font-semibold hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" x-text="acao === 'guardar' ? 'Guardar' : 'Retirar'">Guardar</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+</div>
+{% endblock %}

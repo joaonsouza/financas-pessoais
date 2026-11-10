@@ -1,0 +1,28 @@
+{% set paga = l.status_fatura == "paga" %}
+{% set rotulo_status = {"paga": "Paga", "paga_parcial": "Paga em parte"}.get(l.status_fatura, "Aberta") %}
+<tr id="fatura-tab-{{ l.fatura_id }}" class="hover:bg-page/60 transition-colors duration-150">
+  <td class="pl-4 py-1.5"></td>
+  <td class="px-2 py-1.5">
+    <span class="size-11 -ml-1.5 flex items-center justify-center" title="Fatura {{ rotulo_status|lower }}">
+      <span class="size-6 rounded-full flex items-center justify-center {{ 'bg-income text-white' if paga else 'bg-expense/15 text-expense' }}"><i data-lucide="credit-card" class="size-3.5"></i></span>
+    </span>
+  </td>
+  {% set vencido = hoje is defined and l.status == "pendente" and l.data < hoje %}
+  <td class="px-2 py-1.5 tabular-nums whitespace-nowrap {{ 'text-expense font-medium' if vencido else 'text-ink-muted' }}">{{ l.data|data_br }}{% if vencido %}<span class="block text-xs font-normal">vencido</span>{% endif %}</td>
+  <td class="px-2 py-1.5">
+    <a href="/cartoes/{{ l.cartao_id }}?fatura={{ l.competencia }}" class="font-medium hover:text-primary transition-colors duration-150 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Fatura {{ l.cartao_nome }}</a>
+    <span class="text-ink-muted"> · {{ rotulo_status }}</span>
+  </td>
+  <td class="px-2 py-1.5">
+    <div class="flex items-center gap-2 text-ink-muted">
+      <span class="size-7 rounded-full shrink-0 flex items-center justify-center bg-primary-soft text-primary"><i data-lucide="credit-card" class="size-4"></i></span>
+      {{ l.qtd }} {{ "compra" if l.qtd == 1 else "compras" }}
+    </div>
+  </td>
+  <td class="px-2 py-1.5 truncate">{{ l.cartao_nome }}</td>
+  <td class="px-2 py-1.5 text-right font-semibold tabular-nums whitespace-nowrap text-expense">{{ l.valor|reais }}</td>
+  <td class="pr-4 py-1.5">
+    <a href="/cartoes/{{ l.cartao_id }}?fatura={{ l.competencia }}" aria-label="Ver fatura {{ l.cartao_nome }}"
+       class="ml-auto size-11 rounded-xl flex items-center justify-center text-ink-muted hover:text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="chevron-right" class="size-4"></i></a>
+  </td>
+</tr>

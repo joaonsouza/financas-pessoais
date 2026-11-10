@@ -1,0 +1,127 @@
+{% set cartao_css = "bg-card rounded-[20px] border border-line p-5 shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+<div id="historico" class="space-y-4">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    {# 1. Receitas x Despesas com Taxa de Poupança #}
+    <section class="{{ cartao_css }}" aria-labelledby="rel-rd">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 id="rel-rd" class="font-semibold text-ink">Receitas & Despesas</h2>
+          <p class="text-xs text-ink-muted">Realizado vs. agendado e evolução da taxa de poupança</p>
+        </div>
+      </div>
+      <div class="relative h-72">
+        <canvas id="grafico-rd" role="img" aria-label="Receitas e despesas"></canvas>
+      </div>
+    </section>
+
+    {# 2. Patrimônio #}
+    <section id="patrimonio" class="{{ cartao_css }}" aria-labelledby="rel-patrimonio">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 id="rel-patrimonio" class="font-semibold text-ink">Evolução do Patrimônio</h2>
+          <p class="text-xs text-ink-muted">Saldo líquido (contas ativas) + contas de investimento</p>
+        </div>
+      </div>
+      <div class="relative h-72">
+        <canvas id="grafico-patrimonio" role="img" aria-label="Evolução do patrimônio"></canvas>
+      </div>
+    </section>
+
+    {# 3. Fixos x Variáveis x Dívidas #}
+    <section class="{{ cartao_css }}" aria-labelledby="rel-fv">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 id="rel-fv" class="font-semibold text-ink">Fixos, Variáveis & Dívidas</h2>
+          <p class="text-xs text-ink-muted">Distribuição das saídas com linha de média histórica</p>
+        </div>
+      </div>
+      <div class="relative h-72">
+        <canvas id="grafico-fv" role="img" aria-label="Fixos, variáveis e dívidas"></canvas>
+      </div>
+    </section>
+
+    {# 4. Categorias do Mês #}
+    <section class="{{ cartao_css }} flex flex-col justify-between" aria-labelledby="rel-categorias">
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 id="rel-categorias" class="font-semibold text-ink">Despesas por Categoria ({{ mes|nome_mes }})</h2>
+            <p class="text-xs text-ink-muted">Mês atual comparado com a média dos 3 meses anteriores</p>
+          </div>
+          <span class="text-xs font-semibold tabular-nums text-ink bg-page px-2.5 py-1 rounded-full border border-line">
+            Total: {{ categorias.total_geral|reais }}
+          </span>
+        </div>
+
+        {% if categorias.itens %}
+          <div class="space-y-3" x-data="{ aberta: null }">
+            {% for c in categorias.itens %}
+              <div class="p-3 rounded-xl bg-page/60 border border-line/70 hover:border-line transition-colors">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="size-3 rounded-full shrink-0" style="background: {{ c.cor }}"></span>
+                    <button type="button"
+                            @click="aberta = (aberta === {{ c.categoria_id }} ? null : {{ c.categoria_id }})"
+                            class="font-medium text-sm text-ink truncate hover:text-primary transition-colors text-left flex items-center gap-1 cursor-pointer">
+                      <span>{{ c.nome }}</span>
+                      {% if c.filhas %}
+                        <i data-lucide="chevron-down" class="size-3.5 text-ink-muted transition-transform" :class="aberta === {{ c.categoria_id }} ? 'rotate-180' : ''"></i>
+                      {% endif %}
+                    </button>
+                  </div>
+                  <div class="flex items-center gap-3 shrink-0">
+                    {% if c.variacao_pct is not none %}
+                      <span class="text-[11px] tabular-nums font-medium {{ 'text-expense' if c.variacao_pct > 0 else 'text-income' }}">
+                        {{ '▲ +' if c.variacao_pct > 0 else '▼ ' }}{{ c.variacao_pct }}%
+                      </span>
+                    {% endif %}
+                    <span class="font-semibold text-sm tabular-nums text-ink">{{ c.total|reais }}</span>
+                    {% if c.categoria_id %}
+                      <button type="button"
+                              hx-get="/desempenho/categoria/{{ c.categoria_id }}?mes={{ mes }}"
+                              hx-target="#modal-drilldown"
+                              class="text-ink-muted hover:text-primary transition-colors cursor-pointer"
+                              title="Ver histórico desta categoria">
+                        <i data-lucide="bar-chart-2" class="size-4"></i>
+                      </button>
+                    {% endif %}
+                  </div>
+                </div>
+
+                {# Subcategorias expansíveis #}
+                {% if c.filhas %}
+                  <div x-show="aberta === {{ c.categoria_id }}" x-cloak class="mt-2 pt-2 border-t border-line/60 space-y-1.5 pl-5 text-xs text-ink-muted">
+                    {% for f in c.filhas %}
+                      <div class="flex items-center justify-between gap-2 py-0.5">
+                        <span class="truncate">{{ f.nome }}</span>
+                        <div class="flex items-center gap-2">
+                          <span class="tabular-nums font-medium text-ink">{{ f.total|reais }}</span>
+                          {% if f.categoria_id %}
+                            <a href="/lancamentos?mes={{ mes }}&categoria={{ f.categoria_id }}" class="hover:text-primary">
+                              <i data-lucide="arrow-right" class="size-3"></i>
+                            </a>
+                          {% endif %}
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            {% endfor %}
+
+            {% if categorias.outras_qtd > 0 %}
+              <div class="p-3 rounded-xl bg-page/30 border border-dashed border-line text-xs text-ink-muted flex items-center justify-between">
+                <span>Outras categorias ({{ categorias.outras_qtd }})</span>
+                <span class="font-semibold tabular-nums text-ink">{{ categorias.outras_total|reais }}</span>
+              </div>
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="py-12 text-center text-xs text-ink-muted">
+            Sem despesas registradas no mês.
+          </div>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</div>

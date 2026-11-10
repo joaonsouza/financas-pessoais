@@ -1,0 +1,32 @@
+{
+ "chart": {
+  "result": [
+   {
+    "meta": {
+     "currency": "USD",
+     "symbol": "AAPL",
+     "gmtoffset": -14400,
+     "regularMarketPrice": 227.5,
+     "chartPreviousClose": 225.0
+    },
+    "timestamp": [
+     1785416400,
+     1785502800,
+     1787922000
+    ],
+    "indicators": {
+     "quote": [
+      {
+       "close": [
+        36.1,
+        36.8,
+        37.2
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "error": null
+ }
+}

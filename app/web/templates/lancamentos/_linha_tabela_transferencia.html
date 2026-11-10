@@ -1,0 +1,58 @@
+{# Transferência entre contas numa linha só (ver LinhaTransferencia). #}
+{% set pendente = l.status == "pendente" %}
+<tr id="transf-tab-{{ l.id }}" x-data="{ aberto: false }" class="hover:bg-page/60 transition-colors duration-150">
+  <td class="pl-4 py-1.5">
+    <input type="checkbox" name="ids" value="{{ l.id }}" form="lote"
+           data-valor="0" aria-label="Selecionar {{ l.descricao }}"
+           class="size-5 rounded accent-[var(--c-primary)] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+  </td>
+  <td class="px-2 py-1.5">
+    {% if pendente %}
+      <form hx-post="/lancamentos/efetivar-lote" hx-swap="none">
+        <input type="hidden" name="ids" value="{{ l.id }}">
+        <button aria-label="Pendente: efetivar" title="Pendente: clique para efetivar"
+                class="size-11 -ml-1.5 flex items-center justify-center rounded-full cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+          <span class="size-6 rounded-full flex items-center justify-center bg-expense/15 text-expense"><i data-lucide="alert-circle" class="size-4"></i></span>
+        </button>
+      </form>
+    {% else %}
+      <span class="size-11 -ml-1.5 flex items-center justify-center" title="Efetivado"><span class="size-6 rounded-full flex items-center justify-center bg-income text-white"><i data-lucide="check" class="size-4"></i></span></span>
+    {% endif %}
+  </td>
+  {% set vencido = hoje is defined and l.status == "pendente" and l.data < hoje %}
+  <td class="px-2 py-1.5 tabular-nums whitespace-nowrap {{ 'text-expense font-medium' if vencido else 'text-ink-muted' }}">{{ l.data|data_br }}{% if vencido %}<span class="block text-xs font-normal">vencido</span>{% endif %}</td>
+  <td class="px-2 py-1.5">
+    <div class="flex items-center gap-1.5 min-w-0">
+      <span class="truncate font-medium" title="{{ l.descricao }}">{{ l.descricao }}</span>
+      {% if l.recorrente %}<i data-lucide="repeat" class="size-4 shrink-0 text-primary" title="Recorrente" aria-label="Recorrente"></i>{% endif %}
+    </div>
+  </td>
+  <td class="px-2 py-1.5">
+    <div class="flex items-center gap-2 text-ink-muted">
+      <span class="size-7 rounded-full shrink-0 flex items-center justify-center bg-page"><i data-lucide="{{ 'target' if l.aporte_meta_id else 'arrow-left-right' }}" class="size-4"></i></span>
+      {{ ("Meta: " ~ l.aporte_meta_nome) if l.aporte_meta_id else "Transferência" }}
+    </div>
+  </td>
+  <td class="px-2 py-1.5 truncate" title="{{ l.origem_nome }} → {{ l.destino_nome }}"><a href="/contas/{{ l.destino_id }}" class="hover:text-primary">{{ l.origem_nome }} → {{ l.destino_nome }}</a></td>
+  <td class="px-2 py-1.5 text-right font-semibold tabular-nums whitespace-nowrap">{{ l.valor|reais }}</td>
+  <td class="pr-4 py-1.5">
+    <div class="relative flex justify-end" @click.outside="aberto = false" @keydown.escape="aberto = false">
+      <button type="button" @click="aberto = !aberto" aria-haspopup="menu" :aria-expanded="aberto" aria-label="Ações de {{ l.descricao }}"
+              class="size-11 rounded-xl flex items-center justify-center text-ink-muted hover:text-primary hover:bg-primary-soft cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"><i data-lucide="more-vertical" class="size-4"></i></button>
+      <div x-show="aberto" x-cloak role="menu" class="absolute right-0 top-full z-30 mt-1 w-48 bg-card border border-line rounded-xl shadow-xl py-1 text-sm">
+        <button type="button" role="menuitem" hx-get="/lancamentos/{{ l.id }}/editar" hx-target="#modal" @click="aberto = false"
+                class="w-full flex items-center gap-2 px-3 h-11 hover:bg-page cursor-pointer"><i data-lucide="pencil" class="size-4 text-ink-muted"></i>Editar</button>
+        {% if l.destino_id %}<a href="/contas/{{ l.destino_id }}" role="menuitem" class="w-full flex items-center gap-2 px-3 h-11 hover:bg-page cursor-pointer"><i data-lucide="landmark" class="size-4 text-ink-muted"></i>Ver {{ l.destino_nome }}</a>{% endif %}
+        {% if l.aporte_meta_id %}<a href="/planejamento/metas/{{ l.aporte_meta_id }}" role="menuitem" class="w-full flex items-center gap-2 px-3 h-11 hover:bg-page cursor-pointer"><i data-lucide="target" class="size-4 text-ink-muted"></i>Ver meta</a>{% endif %}
+        {% if l.recorrente and not l.aporte_meta_id %}
+        <button type="button" role="menuitem" hx-get="/lancamentos/{{ l.id }}/excluir" hx-target="#modal" @click="aberto = false"
+                class="w-full flex items-center gap-2 px-3 h-11 text-expense hover:bg-expense/10 cursor-pointer"><i data-lucide="trash-2" class="size-4"></i>Apagar</button>
+        {% else %}
+        <form method="post" action="/lancamentos/{{ l.id }}/excluir" hx-post="/lancamentos/{{ l.id }}/excluir" hx-swap="none" hx-confirm="Apagar a transferência (saída e entrada)?">
+          <button role="menuitem" class="w-full flex items-center gap-2 px-3 h-11 text-expense hover:bg-expense/10 cursor-pointer"><i data-lucide="trash-2" class="size-4"></i>Apagar</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </td>
+</tr>

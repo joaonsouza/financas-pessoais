@@ -1,0 +1,83 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+     x-data="{ aberto: true }"
+     x-show="aberto"
+     @keydown.escape.window="aberto = false; document.getElementById('modal-drilldown').innerHTML = ''">
+  <div class="bg-card rounded-[20px] border border-line shadow-2xl w-full max-w-xl p-5 space-y-4"
+       @click.outside="aberto = false; document.getElementById('modal-drilldown').innerHTML = ''">
+    
+    <div class="flex items-center justify-between border-b border-line pb-3">
+      <div class="flex items-center gap-2">
+        <span class="size-3 rounded-full shrink-0" style="background: {{ serie.cor }}"></span>
+        <h3 class="font-semibold text-lg text-ink">{{ serie.nome }}</h3>
+      </div>
+      <button type="button"
+              @click="aberto = false; document.getElementById('modal-drilldown').innerHTML = ''"
+              class="size-8 rounded-lg flex items-center justify-center text-ink-muted hover:bg-page transition-colors cursor-pointer">
+        <i data-lucide="x" class="size-5"></i>
+      </button>
+    </div>
+
+    <div class="flex items-center justify-between text-xs text-ink-muted">
+      <span>Evolução nos últimos meses</span>
+      <span>Média mensal: <strong class="text-ink tabular-nums">R$ {{ "%.2f"|format(serie.media)|replace(".", ",") }}</strong></span>
+    </div>
+
+    <div class="h-64 relative">
+      <canvas id="grafico-drilldown-cat" role="img" aria-label="Evolução da categoria"></canvas>
+    </div>
+
+    <div class="pt-3 border-t border-line flex justify-between items-center">
+      <a href="/lancamentos?mes={{ mes }}{% if serie.categoria_id %}&categoria={{ serie.categoria_id }}{% else %}&categoria=sem{% endif %}"
+         class="text-xs text-primary font-medium hover:underline flex items-center gap-1">
+        Ver lançamentos em {{ mes }} <i data-lucide="arrow-right" class="size-3.5"></i>
+      </a>
+      <button type="button"
+              @click="aberto = false; document.getElementById('modal-drilldown').innerHTML = ''"
+              class="h-9 px-4 rounded-xl text-xs font-medium text-ink bg-page hover:bg-line transition-colors cursor-pointer">
+        Fechar
+      </button>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const rotulos = {{ serie.rotulos|tojson }};
+      const valores = {{ serie.valores|tojson }};
+      const cor = "{{ serie.cor }}";
+      const canvas = document.getElementById("grafico-drilldown-cat");
+      if (canvas) {
+        new Chart(canvas, {
+          type: "bar",
+          data: {
+            labels: rotulos,
+            datasets: [{
+              label: "Gasto",
+              data: valores,
+              backgroundColor: cor,
+              borderRadius: 4,
+            }]
+          },
+          options: {
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (c) => "R$ " + Number(c.parsed.y).toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+                }
+              }
+            },
+            scales: {
+              y: {
+                ticks: {
+                  callback: (v) => Number(v).toLocaleString("pt-BR", { notation: "compact" })
+                }
+              }
+            }
+          }
+        });
+      }
+      if (window.lucide) lucide.createIcons();
+    })();
+  </script>
+</div>

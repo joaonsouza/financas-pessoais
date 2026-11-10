@@ -1,0 +1,31 @@
+{% from "_macros.html" import barra %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5 block cursor-pointer hover:border-primary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+  <a href="/planejamento?mes={{ mes }}" class="{{ cartao_css }}">
+    <div class="flex items-center gap-2 text-sm text-ink-muted"><i data-lucide="gauge" class="size-4"></i>Teto de gastos</div>
+    {% if teto %}
+      <div class="mt-3">{{ barra(teto.pct, teto.faixa, "Teto de gastos") }}</div>
+      <p class="mt-2 text-sm tabular-nums">{{ teto.projetado|reais }} <span class="text-ink-muted">de {{ teto.limite|reais }} ({{ teto.pct }}%){% if teto.automatico %} · automático{% endif %}</span></p>
+    {% else %}
+      <p class="mt-3 text-sm text-ink-muted">Defina um teto em Planejamento.</p>
+    {% endif %}
+  </a>
+  <a href="/planejamento?mes={{ mes }}#economia" class="{{ cartao_css }}">
+    <div class="flex items-center gap-2 text-sm text-ink-muted"><i data-lucide="piggy-bank" class="size-4"></i>Meta de economia</div>
+    {% if economia %}
+      <div class="mt-3">{{ barra((economia.realizado * 100 // economia.meta) if economia.meta > 0 and economia.realizado > 0 else 0, "ok" if economia.atingida_projetado else "atencao", "Meta de economia") }}</div>
+      <p class="mt-2 text-sm tabular-nums">{{ economia.realizado|reais }} <span class="text-ink-muted">de {{ economia.meta|reais }} · previsto {{ economia.projetado|reais }}</span></p>
+    {% else %}
+      <p class="mt-3 text-sm text-ink-muted">Defina uma meta de economia em Planejamento.</p>
+    {% endif %}
+  </a>
+  <a href="/planejamento?mes={{ mes }}#reserva" class="{{ cartao_css }}">
+    <div class="flex items-center gap-2 text-sm text-ink-muted"><i data-lucide="shield-check" class="size-4"></i>Reserva de emergência</div>
+    {% if reserva %}
+      <div class="mt-3 text-2xl font-semibold tabular-nums">{{ ("%.1f"|format(reserva.meses_que_aguento)|replace(".", ",")) if reserva.meses_que_aguento is not none else "—" }} <span class="text-sm font-normal text-ink-muted">meses de cobertura</span></div>
+      <p class="text-xs text-ink-muted tabular-nums">{{ reserva.atual|reais }} de {{ reserva.alvo|reais }}{% if reserva.proximo_degrau %} · próximo: {{ reserva.proximo_degrau.rotulo }}{% endif %}</p>
+    {% else %}
+      <p class="mt-3 text-sm text-ink-muted">Crie sua reserva em Planejamento.</p>
+    {% endif %}
+  </a>
+</div>

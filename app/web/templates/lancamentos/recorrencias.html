@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% from "_seletor_categoria.html" import seletor_categoria with context %}
+{% block titulo %}Recorrências{% endblock %}
+{% block cabecalho %}Recorrências{% endblock %}
+{% block conteudo %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink font-normal focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set botao = "inline-flex items-center gap-2 bg-primary text-white rounded-xl px-4 h-11 font-medium hover:bg-primary-strong transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set botao_texto = "inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-primary hover:bg-primary-soft transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set botao_perigo = "inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-ink-muted hover:text-expense hover:bg-expense/10 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% set rotulo_css = "flex flex-col gap-1 font-medium text-ink-muted" %}
+{% set check_css = "size-5 rounded accent-[var(--c-primary)] cursor-pointer" %}
+{% if erro %}
+  <div role="alert" class="mb-6 rounded-xl bg-expense/10 border border-expense/30 text-expense px-4 py-3 flex items-start gap-2"><i data-lucide="alert-circle" class="size-5 shrink-0 mt-0.5"></i><span>{{ erro }}</span></div>
+{% endif %}
+<a href="/lancamentos" class="inline-flex items-center gap-1.5 text-sm text-primary font-medium hover:underline mb-4"><i data-lucide="arrow-left" class="size-4"></i>Voltar para Lançamentos</a>
+  <p class="text-sm text-ink-muted mb-3">Alterações aqui valem para "este e os próximos" a partir do mês escolhido. Para mudar só um mês, edite o lançamento na tela de Lançamentos.</p>
+
+  <section class="{{ cartao_css }} divide-y divide-line mb-6">
+    {% for r in recorrencias %}
+      <div x-data="{ editando: false }" class="px-4 py-3 text-sm {{ '' if r.ativa else 'opacity-50' }}">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span class="font-medium flex-1 min-w-40">{{ r.descricao }}</span>
+          <span class="text-ink-muted">{{ contas_por_id[r.conta_id].nome }} · {% if r.frequencia != 'semanal' %}dia {{ r.dia }} · {% endif %}{{ r|regra }}</span>
+          <span class="tabular-nums w-28 text-right">{{ r.valor|reais }}</span>
+          <span class="text-xs text-ink-muted w-28">{{ "encerra " ~ (r.fim|nome_mes) if r.fim else "" }}</span>
+          {% if r.ativa %}<button type="button" @click="editando = !editando" :aria-expanded="editando" class="{{ botao_texto }}"><i data-lucide="pencil" class="size-4"></i>Alterar</button>{% endif %}
+        </div>
+        {% if r.ativa %}
+        <div x-show="editando" x-cloak class="mt-3 space-y-3">
+          <form method="post" action="/lancamentos/recorrencias/{{ r.id }}" class="flex flex-wrap gap-3 items-end">
+            <label class="{{ rotulo_css }}">Descrição<input name="descricao" value="{{ r.descricao }}" class="{{ campo }}"></label>
+            <label class="{{ rotulo_css }}">Conta
+              <select name="conta_id" class="{{ campo }}">
+                {% for c in contas %}<option value="{{ c.id }}" {% if c.id == r.conta_id %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+              </select>
+            </label>
+            {% if r.tipo != "transferencia" %}
+            <div class="{{ rotulo_css }}">Categoria
+              {{ seletor_categoria("categoria_id", r.categoria_id or "", "receita" if r.tipo == "receita" else "despesa", criar=true) }}
+            </div>
+            {% endif %}
+            <label class="{{ rotulo_css }}">Valor<input data-mascara="reais" name="valor" value="{{ r.valor|reais_input }}" inputmode="decimal" class="{{ campo }} w-28"></label>
+            {% if r.frequencia != 'semanal' %}<label class="{{ rotulo_css }}">Dia<input name="dia" value="{{ r.dia }}" inputmode="numeric" class="{{ campo }} w-20"></label>
+            <label class="{{ rotulo_css }}">Repete
+              <select name="intervalo_meses" class="{{ campo }}">
+                {% for n, rotulo in intervalos.items() %}<option value="{{ n }}" {% if n == r.intervalo_meses %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+                {% if r.intervalo_meses not in intervalos %}<option value="{{ r.intervalo_meses }}" selected>A cada {{ r.intervalo_meses }} meses</option>{% endif %}
+              </select>
+            </label>{% endif %}
+            <label class="flex items-center gap-2 min-h-11 cursor-pointer"><input type="checkbox" name="valor_variavel" {% if r.valor_variavel %}checked{% endif %} class="{{ check_css }}"> Valor variável</label>
+            <label class="{{ rotulo_css }}">A partir de<input type="month" name="a_partir" value="{{ competencia_atual }}" class="{{ campo }}"></label>
+            <button class="{{ botao }}"><i data-lucide="check" class="size-4"></i>Salvar</button>
+          </form>
+          <form method="post" action="/lancamentos/recorrencias/{{ r.id }}/encerrar" class="flex flex-wrap gap-3 items-end">
+            <label class="{{ rotulo_css }}">Encerrar a partir de<input type="month" name="a_partir" value="{{ somar_meses(competencia_atual, 1) }}" class="{{ campo }}"></label>
+            <button class="{{ botao_perigo }}"><i data-lucide="circle-stop" class="size-4"></i>Encerrar</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="px-4 py-3 text-sm text-ink-muted">Nenhuma recorrência cadastrada.</p>
+    {% endfor %}
+  </section>
+
+  <details class="{{ cartao_css }} p-5" x-data="{ tipo: 'despesa' }">
+    <summary class="cursor-pointer font-medium flex items-center gap-2 min-h-11 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 rounded-xl"><i data-lucide="plus" class="size-4"></i>Nova recorrência</summary>
+    <form method="post" action="/lancamentos/recorrencias" class="mt-4 flex flex-wrap gap-3 items-end text-sm">
+      <label class="{{ rotulo_css }}">Descrição<input name="descricao" required class="{{ campo }}"></label>
+      <label class="{{ rotulo_css }}">Tipo
+        <select name="tipo" x-model="tipo" class="{{ campo }}">
+          <option value="despesa">Despesa</option><option value="receita">Receita</option><option value="transferencia">Transferência</option>
+        </select>
+      </label>
+      <label class="{{ rotulo_css }}">Conta
+        <select name="conta_id" class="{{ campo }}">{% for c in contas %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select>
+      </label>
+      <label class="{{ rotulo_css }}" x-show="tipo === 'transferencia'" x-cloak>Destino
+        <select name="conta_destino_id" class="{{ campo }}">
+          <option value="">Escolha…</option>
+          {% for c in contas if c.tipo != "cartao" %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+        </select>
+      </label>
+      <div class="{{ rotulo_css }}" x-show="tipo !== 'transferencia'">Categoria
+        {{ seletor_categoria("categoria_id", "", "todas") }}
+      </div>
+      <label class="{{ rotulo_css }}">Valor<input data-mascara="reais" name="valor" required inputmode="decimal" class="{{ campo }} w-28"></label>
+      <label class="{{ rotulo_css }}">Dia<input name="dia" required inputmode="numeric" class="{{ campo }} w-20"></label>
+      <label class="{{ rotulo_css }}">Repete
+        <select name="intervalo_meses" class="{{ campo }}">
+          {% for n, rotulo in intervalos.items() %}<option value="{{ n }}" {% if n == 1 %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="{{ rotulo_css }}">Termina em<input type="month" name="fim" class="{{ campo }}"></label>
+      <label class="{{ rotulo_css }}">Início<input type="month" name="inicio" value="{{ competencia_atual }}" class="{{ campo }}"></label>
+      <label class="flex items-center gap-2 min-h-11 cursor-pointer"><input type="checkbox" name="valor_variavel" class="{{ check_css }}"> Valor variável</label>
+      <button class="{{ botao }}"><i data-lucide="plus" class="size-4"></i>Criar</button>
+    </form>
+  </details>
+{% endblock %}

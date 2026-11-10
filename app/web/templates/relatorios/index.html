@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block titulo %}Relatórios{% endblock %}
+{% block cabecalho %}Relatórios{% endblock %}
+{% block conteudo %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <section class="{{ cartao_css }} p-5 lg:col-span-2" aria-labelledby="rel-categorias">
+    <h2 id="rel-categorias" class="font-semibold mb-4">Despesas por categoria em {{ mes|nome_mes }}</h2>
+    {% if nos %}
+      <div class="relative" style="height: {{ [nos|length * 34 + 40, 160]|max }}px"><canvas id="grafico-categorias" role="img" aria-label="Despesas por categoria no mês"></canvas></div>
+      <ul class="mt-4 divide-y divide-line text-sm">
+        {% for n in nos %}
+          <li class="py-2">
+            <div class="flex items-center justify-between gap-3"><span class="flex items-center gap-2 min-w-0"><span class="size-2.5 rounded-full shrink-0" style="background: {{ n.cor }}"></span><span class="truncate font-medium">{{ n.nome }}</span></span><span class="tabular-nums shrink-0">{{ n.total|reais }}</span></div>
+            {% for nome, total in n.filhas %}
+              <div class="flex items-center justify-between gap-3 pl-5 text-ink-muted"><span class="truncate">{{ nome }}</span><span class="tabular-nums shrink-0">{{ total|reais }}</span></div>
+            {% endfor %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-sm text-ink-muted">Sem despesas neste mês.</p>
+    {% endif %}
+  </section>
+
+  <section class="{{ cartao_css }} p-5" aria-labelledby="rel-rd">
+    <h2 id="rel-rd" class="font-semibold mb-4">Receitas e despesas · 12 meses</h2>
+    <div class="relative h-72"><canvas id="grafico-rd" role="img" aria-label="Receitas e despesas nos últimos 12 meses"></canvas></div>
+  </section>
+
+  <section class="{{ cartao_css }} p-5" aria-labelledby="rel-saldo">
+    <h2 id="rel-saldo" class="font-semibold mb-4">Evolução do saldo líquido · 12 meses</h2>
+    <div class="relative h-72"><canvas id="grafico-saldo" role="img" aria-label="Evolução do saldo líquido nos últimos 12 meses"></canvas></div>
+  </section>
+
+  <section class="{{ cartao_css }} p-5 lg:col-span-2" aria-labelledby="rel-fv">
+    <h2 id="rel-fv" class="font-semibold mb-4">Fixos e variáveis · 12 meses</h2>
+    <div class="relative h-72"><canvas id="grafico-fv" role="img" aria-label="Despesas fixas e variáveis nos últimos 12 meses"></canvas></div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/vendor/chart.umd.js"></script>
+<script>
+  const dados = {{ dados|tojson }};
+  const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const compacto = (v) => Number(v).toLocaleString("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
+  const estilo = getComputedStyle(document.documentElement);
+  const cor = (nome, padrao) => (estilo.getPropertyValue(nome).trim() || padrao);
+  const RECEITA = "#059669", DESPESA = "#DC2626", PRIMARIA = "#3B82F6", AVISO = "#D97706";
+  const tooltipBRL = { callbacks: { label: (c) => c.dataset.label + ": " + brl(c.parsed.y ?? c.parsed.x) } };
+  const eixoBRL = { ticks: { callback: (v) => compacto(v) } };
+
+  const categorias = document.getElementById("grafico-categorias");
+  if (categorias) new Chart(categorias, {
+    type: "bar",
+    data: { labels: dados.categorias.rotulos, datasets: [{ label: "Despesas", data: dados.categorias.valores, backgroundColor: dados.categorias.cores, borderRadius: 6 }] },
+    options: { indexAxis: "y", maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tooltipBRL }, scales: { x: eixoBRL } },
+  });
+
+  new Chart(document.getElementById("grafico-rd"), {
+    type: "bar",
+    data: { labels: dados.receitas_despesas.rotulos, datasets: [
+      { label: "Receitas", data: dados.receitas_despesas.receitas, backgroundColor: RECEITA, borderRadius: 4 },
+      { label: "Despesas", data: dados.receitas_despesas.despesas, backgroundColor: DESPESA, borderRadius: 4 },
+    ] },
+    options: { maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip: tooltipBRL }, scales: { y: eixoBRL } },
+  });
+
+  new Chart(document.getElementById("grafico-saldo"), {
+    type: "line",
+    data: { labels: dados.saldo.rotulos, datasets: [{ label: "Saldo líquido", data: dados.saldo.valores, borderColor: PRIMARIA, backgroundColor: PRIMARIA + "26", fill: true, tension: 0.3, pointRadius: 3 }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip: tooltipBRL }, scales: { y: eixoBRL } },
+  });
+
+  new Chart(document.getElementById("grafico-fv"), {
+    type: "bar",
+    data: { labels: dados.fixos_variaveis.rotulos, datasets: [
+      { label: "Fixos", data: dados.fixos_variaveis.fixos, backgroundColor: PRIMARIA },
+      { label: "Variáveis", data: dados.fixos_variaveis.variaveis, backgroundColor: AVISO },
+    ] },
+    options: { maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip: tooltipBRL }, scales: { x: { stacked: true }, y: { stacked: true, ...eixoBRL } } },
+  });
+</script>
+{% endblock %}

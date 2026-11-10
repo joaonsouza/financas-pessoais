@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block titulo %}IRPF · Bens e Direitos{% endblock %}
+{% block cabecalho %}IRPF · Bens e Direitos{% endblock %}
+{% block conteudo %}
+{% set cartao_css = "bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)]" %}
+{% set campo = "h-11 rounded-xl border border-line bg-card px-3 text-ink tabular-nums focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-colors duration-150" %}
+{% set botao_copiar = "inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 h-8 text-xs font-medium text-ink-muted hover:text-primary hover:border-primary/40 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30" %}
+{% macro sinal(valor) %}{{ 'text-income' if valor > 0 else ('text-expense' if valor < 0 else 'text-ink-muted') }}{% endmacro %}
+
+<a href="/investimentos{{ ('?carteira=' ~ carteira_sel.id) if carteira_sel else '' }}" class="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink mb-4 min-h-11 cursor-pointer"><i data-lucide="chevron-left" class="size-4"></i>Investimentos</a>
+
+{# ---------- Filtros (Ano-calendário, Carteira, Grupo RFB) ---------- #}
+<form method="get" action="/investimentos/irpf" class="{{ cartao_css }} p-5 flex flex-wrap items-end gap-3 mb-5">
+  <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Ano-calendário (posições em 31/12)
+    <select name="ano" onchange="this.form.submit()" class="{{ campo }} cursor-pointer min-w-52">
+      {% for a in anos %}
+      <option value="{{ a }}"{% if a == ano_sel %} selected{% endif %}>{{ a }} (Declaração {{ a + 1 }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% if carteiras|length > 1 %}
+  <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Carteira
+    <select name="carteira" onchange="this.form.submit()" class="{{ campo }} cursor-pointer min-w-48">
+      <option value=""{% if not carteira_sel %} selected{% endif %}>Consolidada (todas + reserva)</option>
+      {% for c in carteiras %}<option value="{{ c.id }}"{% if carteira_sel and carteira_sel.id == c.id %} selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  <label class="flex flex-col gap-1 text-sm font-medium text-ink-muted">Grupo da Receita Federal
+    <select name="grupo" onchange="this.form.submit()" class="{{ campo }} cursor-pointer min-w-64">
+      <option value="">Todos os grupos</option>
+      {% for cod, nome in grupos_rfb.items() %}
+      <option value="{{ cod }}"{% if grupo_sel == cod %} selected{% endif %}>{{ nome }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+
+{# ---------- Cards de resumo ---------- #}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <div class="{{ cartao_css }} p-5">
+    <div class="text-sm text-ink-muted">Situação em 31/12/{{ relatorio.ano_anterior }} (custo)</div>
+    <div class="mt-2 text-2xl font-semibold tabular-nums">{{ relatorio.custo_anterior_total|reais }}</div>
+    <div class="text-xs text-ink-muted mt-1">Soma do custo de aquisição no fim do ano anterior</div>
+  </div>
+  <div class="bg-primary text-white rounded-[20px] shadow-[0_4px_6px_rgba(0,0,0,0.04)] p-5">
+    <div class="text-sm text-white/80">Situação em 31/12/{{ relatorio.ano }} (custo)</div>
+    <div class="mt-2 text-3xl font-semibold tabular-nums">{{ relatorio.custo_atual_total|reais }}</div>
+    <div class="text-xs text-white/80 tabular-nums mt-1">
+      Variação do custo no ano: <span class="font-medium text-white">{{ ("+" if relatorio.variacao_custo_brl > 0 else "") ~ (relatorio.variacao_custo_brl|reais) }}</span>
+    </div>
+  </div>
+  <div class="{{ cartao_css }} p-5">
+    <div class="text-sm text-ink-muted">Itens na ficha de Bens e Direitos</div>
+    <div class="mt-2 text-2xl font-semibold tabular-nums">{{ relatorio.total_itens }}</div>
+    <div class="text-xs text-ink-muted mt-1">Declarados pelo custo de aquisição (nunca pela cotação de mercado)</div>
+  </div>
+</div>
+
+{% if not relatorio.grupos %}
+  <section class="{{ cartao_css }} p-8 text-center space-y-2">
+    <i data-lucide="file-text" class="size-8 text-ink-muted mx-auto"></i>
+    <p class="font-medium">Nenhum bem ou direito encontrado para o ano-calendário {{ relatorio.ano }}.</p>
+    <p class="text-sm text-ink-muted">Ativos com posição em 31/12/{{ relatorio.ano_anterior }} ou em 31/12/{{ relatorio.ano }} aparecerão aqui automaticamente.</p>
+  </section>
+{% else %}
+
+{# ---------- Blocos por Grupo da Receita Federal ---------- #}
+<div class="space-y-6">
+  {% for g in relatorio.grupos %}
+  <section x-data="{ aberto: true }" class="{{ cartao_css }} overflow-hidden">
+    <header class="px-5 py-4 border-b border-line flex flex-wrap items-center justify-between gap-3 bg-page/50">
+      <button type="button" @click="aberto = !aberto" class="inline-flex items-center gap-2.5 text-left font-semibold text-base cursor-pointer focus-visible:outline-none">
+        <i data-lucide="chevron-down" class="size-4 text-ink-muted transition-transform duration-150" :class="!aberto && '-rotate-90'"></i>
+        <span>Grupo {{ g.grupo_nome }}</span>
+        <span class="rounded-full bg-primary-soft text-primary px-2.5 py-0.5 text-xs font-medium tabular-nums">{{ g.itens|length }} {{ 'item' if g.itens|length == 1 else 'itens' }}</span>
+      </button>
+      <div class="flex flex-wrap items-center gap-4 text-xs text-ink-muted tabular-nums">
+        <span>31/12/{{ relatorio.ano_anterior }}: <strong class="text-ink font-semibold">{{ g.custo_anterior_brl|reais }}</strong></span>
+        <span>31/12/{{ relatorio.ano }}: <strong class="text-ink font-semibold">{{ g.custo_atual_brl|reais }}</strong></span>
+      </div>
+    </header>
+
+    <div x-show="aberto" class="divide-y divide-line">
+      {% for item in g.itens %}
+      <article class="p-5 space-y-4">
+        {# Cabeçalho do ativo #}
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <a href="/investimentos/ativos/{{ item.ativo.id }}" class="text-base font-semibold text-primary hover:underline">{{ item.ativo.codigo }}</a>
+            <span class="rounded-md bg-page px-2 py-0.5 text-xs font-medium text-ink-muted">{{ etiquetas_tipo[item.ativo.classe] }}</span>
+            {% if item.ativo.nome and item.ativo.nome.upper() != item.ativo.codigo.upper() %}
+            <span class="text-sm text-ink-muted">· {{ item.ativo.nome }}</span>
+            {% endif %}
+            {% if item.corretora %}
+            <span class="rounded-full border border-line px-2.5 py-0.5 text-xs text-ink-muted">Custódia: <strong class="text-ink font-medium">{{ item.corretora }}</strong></span>
+            {% endif %}
+            {% if item.encerrada_no_ano %}
+            <span class="rounded-full bg-warning/15 text-warning px-2.5 py-0.5 text-xs font-medium">Posição zerada em {{ relatorio.ano }}</span>
+            {% endif %}
+          </div>
+          <div class="text-xs text-ink-muted tabular-nums">
+            {% if item.quantidade_atual > 0 %}
+              {% if item.ativo.classe == "renda_fixa" and not item.ativo.por_titulos %}
+                Renda fixa ativa em 31/12/{{ relatorio.ano }}
+              {% else %}
+                Em 31/12/{{ relatorio.ano }}: <strong class="text-ink">{{ item.quantidade_atual|qtd }}</strong> unid. · PM <strong class="text-ink">{{ item.preco_medio_atual_brl|reais }}</strong>
+              {% endif %}
+            {% else %}
+              Em 31/12/{{ relatorio.ano_anterior }}: <strong class="text-ink">{{ item.quantidade_anterior|qtd }}</strong> unid.
+            {% endif %}
+          </div>
+        </div>
+
+        {# Metadados para o programa da Receita (Grupo, Código, Localização, Negociado em Bolsa) #}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+          <div class="rounded-xl bg-page p-3 border border-line/60 flex items-center justify-between gap-2">
+            <div>
+              <div class="text-xs text-ink-muted">Grupo</div>
+              <div class="font-medium mt-0.5">{{ item.rfb.grupo_nome }}</div>
+            </div>
+          </div>
+          <div class="rounded-xl bg-page p-3 border border-line/60 flex items-center justify-between gap-2">
+            <div>
+              <div class="text-xs text-ink-muted">Código</div>
+              <div class="font-medium mt-0.5">{{ item.rfb.codigo_nome }}</div>
+            </div>
+          </div>
+          <div class="rounded-xl bg-page p-3 border border-line/60">
+            <div class="text-xs text-ink-muted">Localização (País)</div>
+            <div class="font-medium mt-0.5">{{ item.rfb.localizacao_nome }}</div>
+          </div>
+          <div class="rounded-xl bg-page p-3 border border-line/60">
+            <div class="text-xs text-ink-muted">Negociado em bolsa?</div>
+            <div class="font-medium mt-0.5">
+              {% if item.rfb.negociado_em_bolsa %}
+                Sim · Código: <strong class="tabular-nums">{{ item.ativo.codigo }}</strong>
+              {% else %}
+                Não
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        {# Discriminação e Situações em 31/12 com botões Copiar #}
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
+          <div x-data="{ copiado: false }" class="lg:col-span-6 rounded-xl bg-page p-3.5 border border-line/60 flex flex-col justify-between gap-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-medium text-ink-muted">Discriminação sugerida</span>
+              <button type="button"
+                      @click="navigator.clipboard.writeText({{ item.discriminacao|tojson|forceescape }}); copiado = true; setTimeout(() => copiado = false, 1800)"
+                      class="{{ botao_copiar }}">
+                <i data-lucide="copy" class="size-3.5"></i>
+                <span x-text="copiado ? 'Copiado!' : 'Copiar texto'">Copiar texto</span>
+              </button>
+            </div>
+            <p class="text-sm text-ink leading-relaxed select-all">{{ item.discriminacao }}</p>
+          </div>
+
+          <div x-data="{ copiado: false }" class="lg:col-span-3 rounded-xl bg-page p-3.5 border border-line/60 flex flex-col justify-between gap-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-medium text-ink-muted">Situação em 31/12/{{ relatorio.ano_anterior }}</span>
+              <button type="button"
+                      @click="navigator.clipboard.writeText('{{ item.custo_anterior_brl|reais_input }}'); copiado = true; setTimeout(() => copiado = false, 1800)"
+                      class="{{ botao_copiar }}">
+                <i data-lucide="copy" class="size-3.5"></i>
+                <span x-text="copiado ? 'Copiado!' : 'Copiar'">Copiar</span>
+              </button>
+            </div>
+            <div class="text-lg font-semibold tabular-nums">{{ item.custo_anterior_brl|reais }}</div>
+          </div>
+
+          <div x-data="{ copiado: false }" class="lg:col-span-3 rounded-xl bg-page p-3.5 border border-line/60 flex flex-col justify-between gap-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-medium text-ink-muted">Situação em 31/12/{{ relatorio.ano }}</span>
+              <button type="button"
+                      @click="navigator.clipboard.writeText('{{ item.custo_atual_brl|reais_input }}'); copiado = true; setTimeout(() => copiado = false, 1800)"
+                      class="{{ botao_copiar }}">
+                <i data-lucide="copy" class="size-3.5"></i>
+                <span x-text="copiado ? 'Copiado!' : 'Copiar'">Copiar</span>
+              </button>
+            </div>
+            <div class="text-lg font-semibold tabular-nums text-primary">{{ item.custo_atual_brl|reais }}</div>
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,48 @@
+{% import "_macros.html" as m %}
+{# contas zeradas (atual e previsto) ficam só na tela de Contas #}
+{% macro linha(x) %}
+      <li class="py-3">
+        <div class="flex items-center gap-3 mb-2">
+          {{ m.avatar(x.nome, x.cor) }}
+          <span class="font-semibold text-base truncate">{{ x.nome }}</span>
+        </div>
+        <dl class="grid grid-cols-[1fr_auto] gap-y-1">
+          <dt class="text-ink-muted">Saldo atual</dt>
+          {% if x.moeda == "USD" %}
+          <dd class="text-right font-semibold tabular-nums {{ 'text-income' if x.atual_moeda > 0 else 'text-expense' if x.atual_moeda < 0 else 'text-ink-muted' }}">{{ x.atual_moeda|dolares }}
+            <span class="block text-xs font-normal text-ink-muted">{{ "sem cotação do dólar" if x.sem_cotacao else "≈ " ~ (x.atual|reais) }}</span></dd>
+          {% else %}
+          <dd class="text-right font-semibold tabular-nums {{ 'text-income' if x.atual > 0 else 'text-expense' if x.atual < 0 else 'text-ink-muted' }}">{{ x.atual|reais }}</dd>
+          {% endif %}
+          <dt class="text-ink-muted">Saldo previsto <span class="sr-only">no fim do mês</span></dt>
+          <dd class="text-right font-semibold tabular-nums {{ 'text-income' if x.previsto_mes > 0 else 'text-expense' if x.previsto_mes < 0 else 'text-ink-muted' }}" title="No fim do mês, com pendentes e faturas a pagar">{{ x.previsto_mes|reais }}</dd>
+        </dl>
+      </li>
+{% endmacro %}
+{% set dentro = [] %}{% set fora = [] %}
+{% for x in saldos if x.atual or x.previsto_mes %}{% if x.entra_saldo_liquido %}{% set _ = dentro.append(x) %}{% else %}{% set _ = fora.append(x) %}{% endif %}{% endfor %}
+<div class="bg-card rounded-[20px] border border-line shadow-[0_4px_6px_rgba(0,0,0,0.04)] flex flex-col">
+  <h2 class="font-semibold px-5 pt-5 mb-1">Minhas contas</h2>
+  <div class="flex-1 px-5 pb-2 text-sm">
+    <ul class="divide-y divide-line" aria-label="Contas no saldo líquido">
+      {% for x in dentro %}{{ linha(x) }}{% else %}<li class="py-3 text-ink-muted">Nenhuma conta.</li>{% endfor %}
+    </ul>
+    {% if fora %}
+    {# investimentos e caixinhas que não contam como dinheiro disponível: separados, para não confundir com o saldo #}
+    <section x-data="{ aberto: false }" class="mt-2 border-t-2 border-line pt-1" aria-labelledby="titulo-contas-fora">
+      <h3 id="titulo-contas-fora">
+        <button type="button" @click="aberto = !aberto" :aria-expanded="aberto" aria-controls="lista-contas-fora"
+                class="w-full flex items-center gap-2 min-h-11 rounded-xl text-xs font-semibold uppercase tracking-wide text-ink-muted hover:text-primary cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
+          <i data-lucide="chevron-right" class="size-4 transition-transform duration-150" :class="aberto && 'rotate-90'"></i>
+          <i data-lucide="eye-off" class="size-4"></i>Fora do saldo líquido ({{ fora|length }})
+          <span class="ml-auto normal-case tracking-normal font-medium tabular-nums">{{ fora|sum(attribute="atual")|reais }}</span>
+        </button>
+      </h3>
+      <ul id="lista-contas-fora" x-show="aberto" x-cloak class="divide-y divide-line opacity-75" aria-label="Contas fora do saldo líquido">
+        {% for x in fora %}{{ linha(x) }}{% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </div>
+  <a href="/contas?mes={{ mes }}" class="block border-t border-line py-3 text-center text-sm font-semibold uppercase tracking-wide text-primary hover:bg-page rounded-b-[20px] transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">Ver mais</a>
+</div>
