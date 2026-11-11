@@ -20,9 +20,12 @@
       <li class="py-4 flex items-center gap-3">
         {{ m.avatar(f.cartao.nome, f.cartao.cor) }}
         <a href="/cartoes/{{ f.cartao.id }}?fatura={{ f.competencia }}" class="flex-1 min-w-0 rounded-lg cursor-pointer hover:opacity-80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30">
-          <span class="flex items-center gap-2">
-            <span class="font-semibold text-base truncate">{{ f.cartao.nome }}</span>
+          <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span class="font-semibold text-base truncate max-w-full">{{ f.cartao.nome }}</span>
             <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold {{ cor_status[f.status_chave] }}">{{ f.status }}</span>
+            {% if melhor and melhor.cartao.id == f.cartao.id %}
+              <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-primary text-white" title="A compra de hoje só vence em {{ melhor.vencimento|data_br }} ({{ melhor.dias }} dias)">★ Melhor hoje</span>
+            {% endif %}
           </span>
           <span class="block font-semibold tabular-nums {{ 'text-income' if paga else 'text-ink-muted' if nada_a_pagar else 'text-expense' }}">{{ f.total|reais }}</span>
           <span class="block {{ 'text-expense font-medium' if atrasada else 'text-ink-muted' }}">
