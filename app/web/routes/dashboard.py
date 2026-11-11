@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Meta, get_config
-from app.services.faturas import cartoes_ativos, fatura_do_mes, resumo_cartao
+from app.services.faturas import cartoes_ativos, fatura_do_mes, melhor_cartao_hoje, resumo_cartao
 from app.services.indicadores_curso import alertas
 from app.models.investimento import ALOCACOES
 from app.services.invest_carteira import resumo_carteira
@@ -71,6 +71,7 @@ def dashboard(request: Request, mes: str = Depends(mes_selecionado), s: Session 
         },
         "cartoes": resumos_cartao,
         "faturas_mes": faturas_mes,
+        "melhor": melhor_cartao_hoje(s, hoje),
         # faturas que vencem no mês selecionado, como no card de cartões
         "total_cartoes": sum(f["total"] for f in faturas_mes),
         "disponivel_cartoes": sum(r["disponivel"] for r in resumos_cartao if r["limite"]),
