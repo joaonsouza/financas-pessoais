@@ -5,6 +5,8 @@
 """
 import pytest
 
+from tests.factories import nova_conta
+
 
 def test_host_local_passa(client):
     assert client.get("/health").status_code == 200
@@ -45,6 +47,23 @@ def test_post_do_proprio_app_passa(client):
     r = client.post("/configuracoes/ia/chave", data={"chave": "sk-ant-teste"},
                     headers={"Origin": "http://127.0.0.1", "Sec-Fetch-Site": "same-origin"}, follow_redirects=False)
     assert r.status_code != 403
+
+
+@pytest.mark.parametrize("voltar", ["https://evil.example.com/", "//evil.example.com/x", "/\\evil.example.com",
+                                    "javascript:alert(1)"])
+def test_dispensar_alerta_nao_redireciona_para_fora(client, db, voltar):
+    nova_conta(db); db.commit()
+    r = client.post("/planejamento/alertas/dispensar", data={"mes": "2026-10", "chave": "x", "voltar": voltar},
+                    follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/?mes=2026-10"
+
+
+def test_dispensar_alerta_volta_para_caminho_interno(client, db):
+    nova_conta(db); db.commit()
+    r = client.post("/planejamento/alertas/dispensar",
+                    data={"mes": "2026-10", "chave": "x", "voltar": "/desempenho?mes=2026-10#alertas"},
+                    follow_redirects=False)
+    assert r.headers["location"] == "/desempenho?mes=2026-10#alertas"
 
 
 def test_get_de_outro_site_passa(client):

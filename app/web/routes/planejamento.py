@@ -239,7 +239,10 @@ async def dispensar(request: Request, mes_padrao: str = Depends(mes_selecionado)
     form = await request.form()
     mes = _mes_do_form(form, mes_padrao)
     chave = _campo(form, "chave")
-    voltar = _campo(form, "voltar") or f"/?mes={mes}"
+    voltar = _campo(form, "voltar")
+    # Só caminho deste app: "//site" e "/\site" o navegador lê como outro domínio.
+    if not voltar or not voltar.startswith("/") or voltar[1:2] in ("/", "\\"):
+        voltar = f"/?mes={mes}"
     if chave:
         dispensar_alerta(s, mes, chave)
         s.commit()
